@@ -9,12 +9,12 @@ on:
 
 jobs:
   unittest-backend:
-    name: Unit tests (backend)
+    name: Unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
-        working-directory: ./backend
+        working-directory: .
     services:
       postgres:
         image: postgres:15-alpine
@@ -65,7 +65,7 @@ jobs:
 
 
   linting-backend:
-    name: Style tests (backend)
+    name: Style tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,21 +88,3 @@ jobs:
           message: |
             :poop: Code linting failed, use `black` and `isort` to fix it.
 
-
-  linting-frontend:
-    name: Style tests (frontend)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: ./frontend
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - name: Install
-        run: npm ci
-      - name: Check
-        run: npm run check
