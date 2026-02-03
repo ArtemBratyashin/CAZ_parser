@@ -15,9 +15,6 @@ configure:
 	cd frontend && npm install
 
 format:
-	cd backend && source ./venv/bin/activate && autoflake -r --in-place --remove-all-unused-imports ./my_app_api
-	cd backend && source ./venv/bin/activate && isort ./my_app_api
-	cd backend && source ./venv/bin/activate && black ./my_app_api
-	cd frontend && npm run lint
-	cd frontend && npm run format
-	cd frontend && npm run stylelint
+	cd backend && source ./venv/bin/activate && autoflake -r --in-place --remove-all-unused-imports ./src
+	cd backend && source ./venv/bin/activate && isort ./src
+	cd backend && source ./venv/bin/activate && black ./src
