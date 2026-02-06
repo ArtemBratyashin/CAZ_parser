@@ -16,3 +16,11 @@
     ```console
     foo@bar:~$ pip install -Ur requirements.txt -r requirements.dev.txt
     ```
+
+## ENV file description
+
+- WRITER_TOKEN = "..." - токен бота для отправки сообщений
+- MY_CHAT_ID = "..." - id чата,  который необходимо отпралять сообщение
+- TG_API_ID = ... - данные бота парсера
+- TG_API_HASH = '...' - данные бота парсера
+- PHONE_NUMBER = '...' - данные бота парсера
