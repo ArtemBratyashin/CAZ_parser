@@ -29,9 +29,9 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def send_message_on_startup(application: Application) -> None:
     """Отправляет сообщение при запуске бота"""
-    # sources = Database(file = ссылка на файл).sources() -- возвращает массив из словарей с названием, ссылкой, контактом и последней датой
-    # messages = ParserManager(sources = sources).messages_list() -- возвращет масси изсловарей с названием, ссылкой, контактом, текстом и датой
-    ready_text = await MessageComposer(messages=messages).compose()
+    sources = Database(file = file_path).sources()
+    messages = ParserManager(sources = sources).messages_list()
+    ready_text = await TextComposer(messages=messages).compose()
     try:
         await application.bot.send_message(chat_id=CHAT_ID, text=ready_text, parse_mode='Markdown')
         logger.info("✅ Сообщение отправлено")
