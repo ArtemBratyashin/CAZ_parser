@@ -119,13 +119,5 @@ class TelegramParser:
 
     @staticmethod
     def _extract_channel_name(url: str) -> str:
-        """
-        Извлекает имя канала из URL.
-
-        Args:
-            url: str - "https://t.me/channel_name"
-
-        Returns:
-            str - "channel_name"
-        """
+        """Извлекает имя канала из URL."""
         return url.rstrip("/").split("/")[-1]
