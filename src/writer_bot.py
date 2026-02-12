@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import os
 
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from src.parsers.tg_parser import get_last_message_tg
+from parsers.tg_parser import TelegramParser
+from text_composer import TextComposer
 
 load_dotenv()
 TOKEN = os.getenv("WRITER_TOKEN")
@@ -29,11 +31,19 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def send_message_on_startup(application: Application) -> None:
     """Отправляет сообщение при запуске бота"""
-    sources = Database(file = file_path).sources()
-    messages = ParserManager(sources = sources).messages_list()
-    ready_text = await TextComposer(messages=messages).compose()
+    #sources = Database(file = file_path).sources()
+    #messages = ParserManager(sources = sources).messages_list()
+    messages = await TelegramParser().parse([
+        {
+            "source_name": "Кафедра теоретической физики",
+            "source_link": "https://t.me/theorphys_seminar",
+            "contact": "Пример",
+            "last_message_date": "2025-09-01",
+        }
+    ])
+    ready_text = TextComposer(messages=messages).compose()
     try:
-        await application.bot.send_message(chat_id=CHAT_ID, text=ready_text, parse_mode='Markdown')
+        await application.bot.send_message(chat_id=CHAT_ID, text=ready_text, parse_mode=None)
         logger.info("✅ Сообщение отправлено")
         # Database(file = ссылка на файл).update_time()
     except Exception as e:
