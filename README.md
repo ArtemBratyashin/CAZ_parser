@@ -55,8 +55,7 @@ DatabaseReader: читает все кафедры из базы данных
 ParserManager: создаёт задачи для всех источников
     ├─ WebsiteParser
     ├─ VkParser
-    ├─ TgParser
-    └─ ... (ВСЕ ПАРАЛЛЕЛЬНО через asyncio)
+    └─ TgParser
     ↓
 Сбор результатов (со статусами: успех / ошибка)
     ↓
