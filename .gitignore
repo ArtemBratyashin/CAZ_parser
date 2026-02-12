@@ -110,6 +110,7 @@ ENV/
 env.bak/
 venv.bak/
 settings.json
+user_session.session
 
 # Spyder project settings
 .spyderproject

@@ -8,3 +8,5 @@ pydantic[dotenv]
 pydantic-settings
 SQLAlchemy
 uvicorn
+python-telegram-bot[job-queue]
+telethon
