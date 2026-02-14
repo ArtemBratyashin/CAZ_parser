@@ -12,29 +12,25 @@ class TextComposer:
     сообщение для отправки в Telegram.
     """
 
-    def __init__(self, messages: List[Dict]):
-        """messages: List[Dict] - массив новостей"""
-        self.messages = messages or []
-
-    def compose(self) -> str:
+    def compose(self, messages: List[Dict]) -> str:
         """Составляет итоговое сообщение из всех новостей."""
         try:
             today = datetime.now().strftime("%d.%m.%Y")
             header = f"🎓 СВОДКА НОВОСТЕЙ КАФЕДР ({today})\n\n"
 
-            if not self.messages:
-                text = header + "Сообщений нет.\n\n" + self._format_statistics()
+            if not messages:
+                text = header + "Сообщений нет.\n\n" + self._format_statistics(sorted_messages)
                 logger.info("✅ Сообщение составлено: сообщений нет")
                 return text
 
-            sorted_messages = self._sort_by_date()
+            sorted_messages = self._sort_by_date(messages)
 
             text = header
             for msg in sorted_messages:
                 text += self._format_message(msg)
                 text += "\n"
 
-            text += self._format_statistics()
+            text += self._format_statistics(sorted_messages)
 
             logger.info(f"✅ Сообщение составлено. Размер: {len(text)} символов")
             return text
@@ -43,11 +39,11 @@ class TextComposer:
             logger.error(f"❌ Ошибка при составлении сообщения: {e}")
             return "❌ Ошибка при составлении сообщения"
 
-    def _sort_by_date(self) -> List[Dict]:
+    def _sort_by_date(self, messages) -> List[Dict]:
         """Сортирует сообщения по дате в убывающем порядке (новые первыми)."""
         try:
             sorted_list = sorted(
-                self.messages,
+                messages,
                 key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"),
                 reverse=True,
             )
@@ -55,7 +51,7 @@ class TextComposer:
             return sorted_list
         except Exception as e:
             logger.error(f"⚠️ Ошибка при сортировке: {e}, вернул оригинальный список")
-            return self.messages
+            return messages
 
     def _format_message(self, msg: Dict) -> str:
         """Форматирует одну новость в красивый вид (только первые 100 символов)."""
@@ -76,7 +72,7 @@ class TextComposer:
         )
         return formatted
 
-    def _format_statistics(self) -> str:
+    def _format_statistics(self, messages) -> str:
         """Формирует статистику по количеству новостей."""
-        total = len(self.messages)
+        total = len(messages)
         return f"---\n✅ Всего новостей: {total}\n"
