@@ -25,10 +25,15 @@ class WriterBot:
 
     def run(self) -> None:
         '''Активирует бота'''
-        application = Application.builder().token(self._token).build()
+        application = (
+            Application.builder()
+            .token(self._token)
+            .post_init(self.daily_sender)
+            .post_shutdown(self.shutdown)
+            .build()
+        )
         application.add_handler(CommandHandler("start", self.start))
         application.add_handler(CommandHandler("myid", self.my_id))
-        application.post_init = self.daily_sender
         application.run_polling()
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,7 +74,7 @@ class WriterBot:
                     "source_link": "https://t.me/physics_msu_official",
                     "source_type": 'tg',
                     "contact": "Пример",
-                    "last_message_date": "2026-02-12",
+                    "last_message_date": "2026-02-13",
                 },
             ]
             messages_list = await self._parser.parse(sources)
@@ -83,3 +88,12 @@ class WriterBot:
             logger.info("✅ Ежедневное сообщение отправлено")
         except Exception:
             logger.exception("❌ Возникла ошибка при отправке ежедневного сообщения")
+
+    async def shutdown(self, application: Application) -> None:
+        """Корректное завершение: закрываем внешние async-ресурсы."""
+        try:
+            if hasattr(self._parser, "disconnect"):
+                await self._parser.disconnect()
+                logger.info("✅ ParserManager disconnected")
+        except Exception:
+            logger.exception("❌ Ошибка при shutdown: не удалось отключить parser")

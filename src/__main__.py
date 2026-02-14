@@ -27,7 +27,7 @@ if __name__ == "__main__":
         ),
         composer=TextComposer(message_len=200),
         database='',  # необходимо доработать класс для работы с базой данных
-        daily_time=dt.time(20, 54, tzinfo=ZoneInfo("Europe/Moscow")),
+        daily_time=dt.time(21, 9, tzinfo=ZoneInfo("Europe/Moscow")),
     )
 
     bot.run()

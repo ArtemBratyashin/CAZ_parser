@@ -101,3 +101,8 @@ class ParserManager:
                 tasks.append(self._web.parse(web_sources))
 
         return tasks
+
+    async def disconnect(self) -> None:
+        """Отключает внутренние парсеры/клиенты (например, Telethon), если они включены."""
+        if self._tg is not None and hasattr(self._tg, "disconnect"):
+            await self._tg.disconnect()
