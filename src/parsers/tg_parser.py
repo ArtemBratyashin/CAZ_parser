@@ -1,7 +1,7 @@
-import os
 import logging
-from typing import Optional, List, Dict
+import os
 from datetime import datetime
+from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from telethon import TelegramClient
@@ -15,8 +15,9 @@ class TelegramParser:
     Парсер для получения новостей из Telegram каналов.
     Получает массив источников и собирает все сообщения после last_message_date.
     """
+
     def __init__(self, session_name: str = "user_session"):
-        """ session_name: str - имя файла сессии (user_session.session)"""
+        """session_name: str - имя файла сессии (user_session.session)"""
         self.session_name = session_name
         self.API_ID = int(os.getenv("TG_API_ID"))
         self.API_HASH = os.getenv("TG_API_HASH")
@@ -73,17 +74,17 @@ class TelegramParser:
                 if message_date <= last_date:
                     break  # Дальше идут старые сообщения
 
-                results.append({
-                    "source_name": source["source_name"],
-                    "source_link": source["source_link"],
-                    "contact": source["contact"],
-                    "date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
-                    "message": message.text[:100],
-                })
-
-                logger.info(
-                    f"✅ TG: {source['source_name']} – сообщение {message.id} от {message.date}"
+                results.append(
+                    {
+                        "source_name": source["source_name"],
+                        "source_link": source["source_link"],
+                        "contact": source["contact"],
+                        "date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
+                        "message": message.text[:100],
+                    }
                 )
+
+                logger.info(f"✅ TG: {source['source_name']} – сообщение {message.id} от {message.date}")
 
         except Exception as e:
             logger.error(f"❌ Ошибка парсинга канала '{source['source_name']}': {e}")

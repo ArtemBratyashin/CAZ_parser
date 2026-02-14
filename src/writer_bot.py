@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 
@@ -31,16 +30,18 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def send_message_on_startup(application: Application) -> None:
     """Отправляет сообщение при запуске бота"""
-    #sources = Database(file = file_path).sources()
-    #messages = ParserManager(sources = sources).messages_list()
-    messages = await TelegramParser().parse([
-        {
-            "source_name": "Кафедра теоретической физики",
-            "source_link": "https://t.me/theorphys_seminar",
-            "contact": "Пример",
-            "last_message_date": "2025-09-01",
-        }
-    ])
+    # sources = Database(file = file_path).sources()
+    # messages = ParserManager(sources = sources).messages_list()
+    messages = await TelegramParser().parse(
+        [
+            {
+                "source_name": "Кафедра теоретической физики",
+                "source_link": "https://t.me/theorphys_seminar",
+                "contact": "Пример",
+                "last_message_date": "2025-09-01",
+            }
+        ]
+    )
     ready_text = TextComposer(messages=messages).compose()
     try:
         await application.bot.send_message(chat_id=CHAT_ID, text=ready_text, parse_mode=None)
