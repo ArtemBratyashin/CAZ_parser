@@ -12,6 +12,10 @@ class TextComposer:
     сообщение для отправки в Telegram.
     '''
 
+    def __init__(self, message_len: int = 100) -> None:
+        '''Инициализируем составитель текста'''
+        self._message_len = message_len
+
     def compose(self, messages: List[Dict]) -> str:
         '''Составляет итоговое сообщение из всех новостей. Для каждой новости форматирует внешний вид и в конце подводит статистику.'''
         try:
@@ -19,7 +23,7 @@ class TextComposer:
             header = f"🎓 СВОДКА НОВОСТЕЙ КАФЕДР ({today})\n\n"
 
             if not messages:
-                text = header + "Сообщений нет.\n\n" + self._format_statistics(sorted_messages)
+                text = header + "Сообщений нет.\n\n" + self._format_statistics([])
                 logger.info("✅ Сообщение составлено: сообщений нет")
                 return text
 
@@ -61,7 +65,8 @@ class TextComposer:
             message_date = msg.get("date", "неизвестно")
 
         raw = (msg.get("message") or "").strip()
-        preview = raw[:100] if raw else "[нет текста]"
+        raw = " ".join(raw.split())
+        preview = raw[: self._message_len] if raw else "[нет текста]"
 
         formatted = (
             f"---------\n📚 {msg.get('source_name', '—')}\n"
