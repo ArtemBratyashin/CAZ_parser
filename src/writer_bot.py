@@ -26,11 +26,7 @@ class WriterBot:
     def run(self) -> None:
         '''Активирует бота'''
         application = (
-            Application.builder()
-            .token(self._token)
-            .post_init(self.daily_sender)
-            .post_shutdown(self.shutdown)
-            .build()
+            Application.builder().token(self._token).post_init(self.daily_sender).post_shutdown(self.shutdown).build()
         )
         application.add_handler(CommandHandler("start", self.start))
         application.add_handler(CommandHandler("myid", self.my_id))
