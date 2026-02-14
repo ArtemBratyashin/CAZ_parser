@@ -1,63 +1,72 @@
+import datetime as dt
 import logging
-import os
 
-from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from parsers.tg_parser import TelegramParser
-from text_composer import TextComposer
-
-load_dotenv()
-TOKEN = os.getenv("WRITER_TOKEN")
-CHAT_ID = int(os.getenv("MY_CHAT_ID"))
-
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обычный обработчик /start"""
-    await update.message.reply_text("Привет! Я собираю информацию о кафедрах для КАЯ.")
+class WriterBot:
+    def __init__(self, token: str, chat_id: int, database, parser, composer, daily_time: dt.time) -> None:
+        self._token = token
+        self._chat_id = chat_id
+        self._database = database
+        self._parser = parser
+        self._composer = composer
+        self._daily_time = daily_time or dt.time(hour=17, minute=0)
 
+    def run(self) -> None:
+        application = Application.builder().token(self._token).build()
+        application.add_handler(CommandHandler("start", self.start))
+        application.add_handler(CommandHandler("myid", self.my_id))
+        application.post_init = self.daily_sender
+        application.run_polling()
 
-async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Показывает chat_id текущего чата"""
-    chat_id = update.effective_chat.id
-    chat_type = update.effective_chat.type
-    await update.message.reply_text(f"📱 Ваш chat_id: {chat_id}\n" f"  Тип чата: {chat_type}")
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if update.message:
+            await update.message.reply_text("Привет! Я собираю информацию о кафедрах для КАЯ.")
 
+    async def my_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat = update.effective_chat
+        if update.message and chat:
+            await update.message.reply_text(f"📱 Ваш chat_id: {chat.id}\nТип чата: {chat.type}")
 
-async def send_message_on_startup(application: Application) -> None:
-    """Отправляет сообщение при запуске бота"""
-    # sources = Database(file = file_path).sources()
-    # messages = ParserManager(sources = sources).messages_list()
-    messages = await TelegramParser().parse(
-        [
-            {
-                "source_name": "Кафедра теоретической физики",
-                "source_link": "https://t.me/theorphys_seminar",
-                "contact": "Пример",
-                "last_message_date": "2025-09-01",
-            }
-        ]
-    )
-    ready_text = TextComposer(messages=messages).compose()
-    try:
-        await application.bot.send_message(chat_id=CHAT_ID, text=ready_text, parse_mode=None)
-        logger.info("✅ Сообщение отправлено")
-        # Database(file = ссылка на файл).update_time()
-    except Exception as e:
-        logger.error(f"❌ Ошибка при отправке: {e}")
+    async def daily_sender(self, application: Application) -> None:
+        '''Ежедневная отправка в daily_time'''
+        job = application.job_queue.run_daily(
+            self._send_digest,
+            time=self._daily_time,
+            name="daily_digest",
+        )
+        logger.info("📅 Daily digest scheduled at %s", self._daily_time.isoformat())
+        logger.info("📅 Next_run_time=%s", getattr(job, "next_run_time", None))
 
+    async def _send_digest(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            # sources = self._database.sources()
+            sources = [
+                {
+                    "source_name": "Кафедра теоретической физики",
+                    "source_link": "https://t.me/theorphys_seminar",
+                    "contact": "Пример",
+                    "last_message_date": "2025-09-01",
+                },
+                {
+                    "source_name": "Физический факультет",
+                    "source_link": "https://t.me/physics_msu_official",
+                    "contact": "Пример",
+                    "last_message_date": "2026-02-12",
+                },
+            ]
+            messages_list = await self._parser.parse(sources)
+            text = self._composer.compose(messages_list)
 
-def run_bot() -> None:
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("myid", my_id))
-    application.post_init = send_message_on_startup
-    application.run_polling()
-
-
-if __name__ == '__main__':
-    run_bot()
+            await context.bot.send_message(
+                chat_id=self._chat_id,
+                text=text,
+                parse_mode=None,
+            )
+            logger.info("✅ Daily digest sent")
+        except Exception:
+            logger.exception("❌ Failed to send daily digest")
