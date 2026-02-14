@@ -4,7 +4,13 @@ from dotenv import load_dotenv
 
 
 class EnvConfig:
+    '''
+    Данный класс отвечает за конфиг.
+    Класс нужен для удобства загрузки и проверки переменных для работы с ботами.
+    '''
+
     def __init__(self, env_file: str = None) -> None:
+        '''Загружаем и проверяем переменные'''
         load_dotenv(env_file)
 
         writer_token = os.getenv("WRITER_TOKEN")

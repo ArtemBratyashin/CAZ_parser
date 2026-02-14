@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramParser:
-    """
+    '''
     Парсер для получения новостей из Telegram каналов.
     Получает массив источников и собирает все сообщения после last_message_date.
-    """
+    '''
 
     def __init__(self, api_id: int, api_hash, phone_number, session_name: str = "user_session"):
-        """session_name: str - имя файла сессии (user_session.session)"""
+        '''session_name: str - имя файла сессии (user_session.session)'''
         self._session_name = session_name
         self._api_id = api_id
         self._api_hash = api_hash
@@ -24,7 +24,7 @@ class TelegramParser:
         self._client: Optional[TelegramClient] = None
 
     async def parse(self, sources: List[Dict]) -> List[Dict]:
-        """Парсит список Telegram каналов параллельно и собирает все новости."""
+        '''Парсит список Telegram каналов и собирает все новости. Для каждого источника новости парсятся отдельно.'''
         try:
             await self._ensure_client()
             results = []
@@ -43,7 +43,7 @@ class TelegramParser:
             return []
 
     async def _ensure_client(self) -> None:
-        """Создаёт и подключает клиента, если он ещё не создан."""
+        '''Создаёт и подключает клиента, если он ещё не создан.'''
         if self._client is not None:
             return
 
@@ -57,7 +57,7 @@ class TelegramParser:
 
         logger.info("🔐 Первая авторизация в Telegram.")
         await self._client.send_code_request(self._phone_number)
-        code = input("Введите код из Telegram: ").strip()
+        code = input("🔐 Введите код из Telegram: ").strip()
 
         try:
             await self._client.sign_in(self._phone_number, code)
@@ -66,14 +66,14 @@ class TelegramParser:
             logger.error(f"Ошибка авторизации: {auth_error}")
 
             if "password" in str(auth_error).lower() or "two-step" in str(auth_error).lower():
-                password = input("Введите пароль 2FA: ").strip()
+                password = input("🔐 Введите пароль 2FA: ").strip()
                 await self._client.sign_in(password=password)
                 logger.info("✅ 2FA авторизация успешна и сохранена в .session")
             else:
                 raise
 
     async def _parse_single_channel(self, source: Dict) -> List[Dict]:
-        """Парсит один Telegram канал и собирает новости после last_message_date."""
+        '''Парсит один Telegram канал и собирает новости после last_message_date.'''
         results = []
 
         try:
@@ -110,7 +110,7 @@ class TelegramParser:
         return results
 
     async def disconnect(self) -> None:
-        """Отключает клиента от Telegram."""
+        '''Отключает клиента от Telegram.'''
         if self._client:
             await self._client.disconnect()
             self._client = None
@@ -118,5 +118,5 @@ class TelegramParser:
 
     @staticmethod
     def _extract_channel_name(url: str) -> str:
-        """Извлекает имя канала из URL."""
+        '''Извлекает имя канала из URL.'''
         return url.rstrip("/").split("/")[-1]

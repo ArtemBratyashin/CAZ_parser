@@ -22,7 +22,7 @@ if __name__ == "__main__":
         ),
         composer=TextComposer(),
         database='',
-        daily_time=dt.time(15, 56, tzinfo=ZoneInfo("Europe/Moscow")),
+        daily_time=dt.time(17, 00, tzinfo=ZoneInfo("Europe/Moscow")),
     )
 
     bot.run()
