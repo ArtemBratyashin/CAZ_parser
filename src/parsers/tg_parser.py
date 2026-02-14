@@ -2,10 +2,8 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from dotenv import load_dotenv
 from telethon import TelegramClient
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 

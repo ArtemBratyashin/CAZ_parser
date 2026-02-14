@@ -7,7 +7,7 @@ from src.text_composer import TextComposer
 
 
 def test_compose_empty_messages_shows_no_messages_and_stats():
-    result = TextComposer(messages=[]).compose()
+    result = TextComposer(message_len=100).compose(messages=[])
 
     # Заголовок есть, но дату не фиксируем — проверяем шаблон
     assert re.search(r"^🎓 СВОДКА НОВОСТЕЙ КАФЕДР \(\d{2}\.\d{2}\.\d{4}\)\n\n", result)
@@ -16,7 +16,7 @@ def test_compose_empty_messages_shows_no_messages_and_stats():
 
 
 def test_compose_none_messages_treated_as_empty():
-    result = TextComposer(messages=None).compose()
+    result = TextComposer(message_len=100).compose(messages=None)
 
     assert "Сообщений нет." in result
 
@@ -39,7 +39,7 @@ def test_compose_sorts_by_date_desc():
         },
     ]
 
-    result = TextComposer(messages=messages).compose()
+    result = TextComposer(message_len=100).compose(messages=messages)
 
     pos_b = result.find("📚 Кафедра B")
     pos_a = result.find("📚 Кафедра A")
@@ -59,7 +59,7 @@ def test_compose_message_is_cut_to_100_chars():
         }
     ]
 
-    result = TextComposer(messages=messages).compose()
+    result = TextComposer(message_len=100).compose(messages=messages)
 
     assert ("📝 Новость: " + ("a" * 100)) in result
     assert ("a" * 101) not in result
@@ -76,7 +76,7 @@ def test_compose_when_message_empty_puts_placeholder():
         }
     ]
 
-    result = TextComposer(messages=messages).compose()
+    result = TextComposer(message_len=100).compose(messages=messages)
 
     assert "📝 Новость: [нет текста]" in result
 
@@ -92,6 +92,6 @@ def test_compose_date_is_formatted_dd_mm_yyyy():
         }
     ]
 
-    result = TextComposer(messages=messages).compose()
+    result = TextComposer(message_len=100).compose(messages=messages)
 
     assert "📅 Дата: 11.02.2026" in result
