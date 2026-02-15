@@ -10,3 +10,5 @@ SQLAlchemy
 uvicorn
 python-telegram-bot[job-queue]
 telethon
+pandas
+openpyxl

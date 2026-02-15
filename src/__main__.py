@@ -7,9 +7,9 @@ from parser_manager import ParserManager
 from parsers.tg_parser import TelegramParser
 from text_composer import TextComposer
 from writer_bot import WriterBot
+from excel_file import ExcelFile
 
 if __name__ == "__main__":
-
     logging.basicConfig(level=logging.INFO)
 
     bot = WriterBot(
@@ -26,8 +26,8 @@ if __name__ == "__main__":
             # web_parser=WebsiteParser() необходимо доработать класс для парсинга сайтов
         ),
         composer=TextComposer(message_len=200),
-        database='',  # необходимо доработать класс для работы с базой данных
-        daily_time=dt.time(21, 9, tzinfo=ZoneInfo("Europe/Moscow")),
+        database=ExcelFile(filename='temp_sources.xlsx'),
+        daily_time=dt.time(16, 11, tzinfo=ZoneInfo("Europe/Moscow")),
     )
 
     bot.run()

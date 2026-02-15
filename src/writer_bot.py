@@ -56,23 +56,7 @@ class WriterBot:
     async def _send_digest(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         '''Собирает из базы данных список источников, парсит их через parser_manager, составляет сообщение и отправляет в чат'''
         try:
-            # sources = self._database.sources() - пока что сделано
-            sources = [
-                {
-                    "source_name": "Кафедра теоретической физики",
-                    "source_link": "https://t.me/theorphys_seminar",
-                    "source_type": 'tg',
-                    "contact": "Пример",
-                    "last_message_date": "2025-09-01",
-                },
-                {
-                    "source_name": "Физический факультет",
-                    "source_link": "https://t.me/physics_msu_official",
-                    "source_type": 'tg',
-                    "contact": "Пример",
-                    "last_message_date": "2026-02-13",
-                },
-            ]
+            sources = self._database.sources()
             messages_list = await self._parser.parse(sources)
             text = self._composer.compose(messages_list)
 
