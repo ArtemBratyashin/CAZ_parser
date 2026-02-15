@@ -66,6 +66,7 @@ class WriterBot:
                 parse_mode=None,
             )
             logger.info("✅ Ежедневное сообщение отправлено")
+            self._database.update_dates(messages=messages_list)
         except Exception:
             logger.exception("❌ Возникла ошибка при отправке ежедневного сообщения")
 

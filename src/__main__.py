@@ -27,7 +27,7 @@ if __name__ == "__main__":
         ),
         composer=TextComposer(message_len=200),
         database=ExcelFile(filename='temp_sources.xlsx'),
-        daily_time=dt.time(16, 11, tzinfo=ZoneInfo("Europe/Moscow")),
+        daily_time=dt.time(18, 41, tzinfo=ZoneInfo("Europe/Moscow")),
     )
 
     bot.run()

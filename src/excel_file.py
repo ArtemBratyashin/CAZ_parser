@@ -12,7 +12,7 @@ class ExcelFile:
     2) Обновляет данные по дате последней найденной новости
     '''
     def __init__(self, filename: str, data_dir="data") -> None:
-        """Сохраняет имя Excel-файла в data/."""
+        """Сохраняет имя Excel-файла в data."""
         self._filename = filename
         self._data_dir = Path(data_dir)
 
@@ -32,6 +32,29 @@ class ExcelFile:
         for row in df.to_dict(orient="records"):
             result.extend(self._sources_from_row(row))
         return result
+    
+    def update_dates(self, messages: List[Dict]) -> None:
+        """
+        Обновляет 'Последняя дата' в Excel по сообщениям.
+        Для каждой кафедры (source_name) берёт максимальную дату из messages и записывает её в строку кафедры.
+        """
+        updates = self._collect_updates_by_cafedras(messages)
+        if not updates:
+            return
+
+        path = (self._data_dir / self._filename).resolve()
+        df = pd.read_excel(path)
+        df.columns = [str(c).strip() for c in df.columns]
+
+        for i, row in df.iterrows():
+            cafedra = self._clean_text(row.get("Кафедра"))
+            new_date = updates.get(cafedra)
+            if not new_date:
+                continue
+            df.at[i, "Последняя дата"] = new_date
+
+        df.to_excel(path, index=False)
+
 
     def _sources_from_row(self, row: Dict) -> List[Dict]:
         """Преобразует одну строку Excel в 0..3 источника, пропуская отсутствующие ссылки."""
@@ -62,19 +85,42 @@ class ExcelFile:
             "source_link": link,
             "source_type": source_type,
             "contact": contact,
-            "last_message_date": last_message_date,
+            "last_message_date": last_message_date
         }
+    
+    def _collect_updates_by_cafedras(self, messages: List[Dict]) -> Dict[str, str]:
+        """
+        Состаляет список обновлений: source_name -> max(date) в формате YYYY-MM-DD.
+        """
+        updates: Dict[str, str] = {}
+
+        for m in messages:
+            name = self._clean_text(m.get("source_name"))
+            date_str = self._to_iso_date(m.get("date"))
+
+            if not name or not date_str:
+                continue
+
+            prev = updates.get(name)
+            if prev is None:
+                updates[name] = date_str
+                continue
+
+            if self._to_iso_date(date_str) > self._to_iso_date(prev):
+                updates[name] = date_str
+
+        return updates
 
     def _clean_text(self, val) -> str:
         """Преобразует значение ячейки в строку, превращая NaN/None в пустую строку."""
         if pd.isna(val):
-            return ""  # pd.isna распознаёт NaN/NA [web:654]
+            return ""
         return str(val).strip()
 
     def _clean_link(self, val) -> Optional[str]:
         """Возвращает ссылку или None, если ячейка пустая/NaN/дефис."""
         if pd.isna(val):
-            return None  # [web:654]
+            return None 
         s = str(val).strip()
         if not s or s == "-":
             return None
@@ -83,7 +129,7 @@ class ExcelFile:
     def _to_iso_date(self, val) -> str:
         """Нормализует дату к YYYY-MM-DD (date/datetime или строка DD.MM.YYYY), иначе возвращает как есть."""
         if pd.isna(val):
-            return ""  # [web:654]
+            return ""
 
         if isinstance(val, dt.datetime):
             return val.date().strftime("%Y-%m-%d")
