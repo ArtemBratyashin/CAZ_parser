@@ -127,7 +127,7 @@ class ExcelFile:
         return s
 
     def _to_iso_date(self, val) -> str:
-        """Нормализует дату к YYYY-MM-DD (date/datetime или строка DD.MM.YYYY), иначе возвращает как есть."""
+        """Нормализует дату к YYYY-MM-DD или иначе возвращает как есть."""
         if pd.isna(val):
             return ""
 
@@ -140,8 +140,11 @@ class ExcelFile:
         if not s:
             return ""
 
-        try:
-            d = dt.datetime.strptime(s, "%d.%m.%Y").date()
-            return d.strftime("%Y-%m-%d")
-        except ValueError:
-            return s
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
+            try:
+                d = dt.datetime.strptime(s, fmt).date()
+                return d.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
+        return s

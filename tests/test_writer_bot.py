@@ -101,6 +101,17 @@ class _FakeComposer:
 
     def last_messages(self):
         return self._last_messages
+    
+class _FakeDatabase:
+    def __init__(self, sources):
+        self._sources = sources
+        self._updated_messages = None
+
+    def sources(self):
+        return list(self._sources)
+
+    def update_dates(self, messages):
+        self._updated_messages = list(messages)
 
 
 async def test_start_replies_greeting_when_message_exists():
@@ -160,15 +171,29 @@ async def test_daily_sender_schedules_job_with_given_time_and_name():
 async def test_send_digest_sends_composed_text_to_configured_chat():
     fake_bot = _FakeBot()
     context = _FakeContext(bot=fake_bot)
+
+    db_sources = [
+        {
+            "source_name": f"кафедра-{_nonce()}",
+            "source_link": "https://t.me/x",
+            "source_type": "tg",
+            "contact": "контакт",
+            "last_message_date": "2026-02-01",
+        }
+    ]
+    db = _FakeDatabase(sources=db_sources)
+
     messages = [{"title": f"новость-{_nonce()}"}]
     parser = _FakeParser(result=messages)
+
     composer_text = f"дайджест-{_nonce()}"
     composer = _FakeComposer(text=composer_text)
+
     chat_id = random.randint(10_000, 99_999)
     bot = WriterBot(
         token=_nonce(),
         chat_id=chat_id,
-        database=None,
+        database=db,
         parser=parser,
         composer=composer,
         daily_time=dt.time(hour=17, minute=0),
@@ -177,6 +202,8 @@ async def test_send_digest_sends_composed_text_to_configured_chat():
     await bot._send_digest(context)
 
     assert fake_bot.sent()[0]["chat_id"] == chat_id
+
+
 
 
 async def test_shutdown_disconnects_parser_when_disconnect_exists():
