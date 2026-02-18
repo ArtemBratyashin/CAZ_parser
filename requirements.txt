@@ -12,3 +12,4 @@ python-telegram-bot[job-queue]
 telethon
 pandas
 openpyxl
+vk_api

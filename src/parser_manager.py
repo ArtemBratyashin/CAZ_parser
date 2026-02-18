@@ -106,3 +106,5 @@ class ParserManager:
         """Отключает внутренние парсеры/клиенты (например, Telethon), если они включены."""
         if self._tg is not None and hasattr(self._tg, "disconnect"):
             await self._tg.disconnect()
+        if self._vk is not None and hasattr(self._vk, "disconnect"):
+            await self._vk.disconnect()
