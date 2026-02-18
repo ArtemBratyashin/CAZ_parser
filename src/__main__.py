@@ -21,6 +21,7 @@ if __name__ == "__main__":
                 api_hash=EnvConfig().tg_api_hash(),
                 phone_number=EnvConfig().phone_number(),
                 session_name="user_session",
+                max_date=date.today() - timedelta(days=1)
             ),
             # vk_parser=VkParser(), необходимо доработать класс для вк парсинга
             # web_parser=WebsiteParser() необходимо доработать класс для парсинга сайтов

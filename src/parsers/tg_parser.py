@@ -13,13 +13,14 @@ class TelegramParser:
     Получает массив источников и собирает все сообщения после last_message_date.
     '''
 
-    def __init__(self, api_id: int, api_hash, phone_number, session_name: str = "user_session"):
+    def __init__(self, api_id: int, api_hash, phone_number, session_name: str = "user_session", max_date: Optional[date] = None):
         '''session_name: str - имя файла сессии (user_session.session)'''
         self._session_name = session_name
         self._api_id = api_id
         self._api_hash = api_hash
         self._phone_number = phone_number
         self._client: Optional[TelegramClient] = None
+        self._max_date = max_date
 
     async def parse(self, sources: List[Dict]) -> List[Dict]:
         '''Парсит список Telegram каналов и собирает все новости. Для каждого источника новости парсятся отдельно.'''
@@ -71,24 +72,28 @@ class TelegramParser:
                 raise
 
     async def _parse_single_channel(self, source: Dict) -> List[Dict]:
-        '''Парсит один Telegram канал и собирает новости после last_message_date.'''
+        """Парсит один Telegram канал и собирает новости после last_message_date и не позже max_date."""
         results = []
 
         try:
             channel_username = self._extract_channel_name(source["source_link"])
             last_date = datetime.strptime(source["last_message_date"], "%Y-%m-%d").date()
 
-            logger.info(f"🔍 TG: Парсю канал '{source['source_name']}' ({channel_username})")
+            max_date = self._max_date
 
-            # Получить все сообщения из канала в обратном порядке (новые первыми)
+            logger.info("🔍 TG: Парсю канал %r (%s) в диапазоне (%s, %s]", source["source_name"], channel_username, last_date, max_date)
+
             async for message in self._client.iter_messages(channel_username, reverse=False):
                 if not message or not message.text:
                     continue
 
-                # Проверяем, что сообщение новее last_message_date
                 message_date = message.date.date()
+
                 if message_date <= last_date:
-                    break  # Дальше идут старые сообщения
+                    break
+
+                if max_date is not None and message_date > max_date:
+                    continue
 
                 results.append(
                     {
@@ -100,10 +105,15 @@ class TelegramParser:
                     }
                 )
 
-                logger.info(f"✅ TG: {source['source_name']} – сообщение {message.id} от {message.date}")
+                logger.info(
+                    "✅ TG: %s – сообщение %s от %s",
+                    source["source_name"],
+                    message.id,
+                    message.date,
+                )
 
         except Exception as e:
-            logger.error(f"❌ Ошибка парсинга канала '{source['source_name']}': {e}")
+            logger.error("❌ Ошибка парсинга канала %r: %s", source["source_name"], e)
 
         return results
 
