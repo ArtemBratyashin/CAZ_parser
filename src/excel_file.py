@@ -11,6 +11,7 @@ class ExcelFile:
     1) Получать список ссылок в разбивке по источникам
     2) Обновляет данные по дате последней найденной новости
     '''
+
     def __init__(self, filename: str, data_dir="data") -> None:
         """Сохраняет имя Excel-файла в data."""
         self._filename = filename
@@ -19,7 +20,7 @@ class ExcelFile:
     def sources(self) -> List[Dict]:
         """Читает Excel и возвращает только существующие источники (web/vk/tg) как массив словарей."""
         path = (self._data_dir / self._filename).resolve()
-        df = pd.read_excel(path) 
+        df = pd.read_excel(path)
 
         df.columns = [str(c).strip() for c in df.columns]
 
@@ -32,7 +33,7 @@ class ExcelFile:
         for row in df.to_dict(orient="records"):
             result.extend(self._sources_from_row(row))
         return result
-    
+
     def update_dates(self, messages: List[Dict]) -> None:
         """
         Обновляет 'Последняя дата' в Excel по сообщениям.
@@ -55,7 +56,6 @@ class ExcelFile:
 
         df.to_excel(path, index=False)
 
-
     def _sources_from_row(self, row: Dict) -> List[Dict]:
         """Преобразует одну строку Excel в 0..3 источника, пропуская отсутствующие ссылки."""
         source_name = self._clean_text(row.get("Кафедра"))
@@ -75,7 +75,9 @@ class ExcelFile:
                 result.append(src)
         return result
 
-    def _build_source(self,source_name: str, contact: str, last_message_date: str, link: Optional[str], source_type: str) -> Optional[Dict]:
+    def _build_source(
+        self, source_name: str, contact: str, last_message_date: str, link: Optional[str], source_type: str
+    ) -> Optional[Dict]:
         """Создаёт словарь источника или возвращает None, если ссылки нет."""
         if not link:
             return None
@@ -85,9 +87,9 @@ class ExcelFile:
             "source_link": link,
             "source_type": source_type,
             "contact": contact,
-            "last_message_date": last_message_date
+            "last_message_date": last_message_date,
         }
-    
+
     def _collect_updates_by_cafedras(self, messages: List[Dict]) -> Dict[str, str]:
         """
         Состаляет список обновлений: source_name -> max(date) в формате YYYY-MM-DD.
@@ -120,7 +122,7 @@ class ExcelFile:
     def _clean_link(self, val) -> Optional[str]:
         """Возвращает ссылку или None, если ячейка пустая/NaN/дефис."""
         if pd.isna(val):
-            return None 
+            return None
         s = str(val).strip()
         if not s or s == "-":
             return None

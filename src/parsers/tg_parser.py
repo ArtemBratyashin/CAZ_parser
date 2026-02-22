@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from telethon import TelegramClient
@@ -13,7 +13,14 @@ class TelegramParser:
     Получает массив источников и собирает все сообщения после last_message_date.
     '''
 
-    def __init__(self, api_id: int, api_hash: str, phone_number, session_name: str = "user_session", max_date: Optional[date] = None):
+    def __init__(
+        self,
+        api_id: int,
+        api_hash: str,
+        phone_number,
+        session_name: str = "user_session",
+        max_date: Optional[date] = None,
+    ):
         '''session_name: str - имя файла сессии (user_session.session)'''
         self._session_name = session_name
         self._api_id = api_id
@@ -81,7 +88,13 @@ class TelegramParser:
 
             max_date = self._max_date
 
-            logger.info("🔍 TG: Парсю канал %r (%s) в диапазоне (%s, %s]", source["source_name"], channel_username, last_date, max_date)
+            logger.info(
+                "🔍 TG: Парсю канал %r (%s) в диапазоне (%s, %s]",
+                source["source_name"],
+                channel_username,
+                last_date,
+                max_date,
+            )
 
             async for message in self._client.iter_messages(channel_username, reverse=False):
                 if not message or not message.text:

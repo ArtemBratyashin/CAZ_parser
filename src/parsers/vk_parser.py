@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, date
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 import vk_api
@@ -14,7 +14,9 @@ class VkParser:
     и не позже max_date.
     """
 
-    def __init__(self, token: str, session_name: str = "vk_session", max_date: Optional[date] = None, api_version: str = "5.199"):
+    def __init__(
+        self, token: str, session_name: str = "vk_session", max_date: Optional[date] = None, api_version: str = "5.199"
+    ):
         """Авторизуемся в ВК по токену"""
         self._session_name = session_name
         self._token = token
@@ -63,7 +65,13 @@ class VkParser:
             last_date = datetime.strptime(source["last_message_date"], "%Y-%m-%d").date()
             max_date = self._max_date
 
-            logger.info("🔍 VK: Парсю группу %r (%s) в диапазоне (%s, %s]", source["source_name"], group_identifier, last_date, max_date)
+            logger.info(
+                "🔍 VK: Парсю группу %r (%s) в диапазоне (%s, %s]",
+                source["source_name"],
+                group_identifier,
+                last_date,
+                max_date,
+            )
 
             params = {
                 "count": 100,

@@ -13,7 +13,6 @@ class EnvConfig:
         '''Загружаем и проверяем переменные'''
         self._env_file = env_file
 
-
     def writer_token(self) -> str:
         load_dotenv(dotenv_path=self._env_file)
         writer_token = os.getenv("WRITER_TOKEN")
@@ -53,7 +52,7 @@ class EnvConfig:
         if not phone_number:
             raise ValueError("PHONE_NUMBER is missing")
         return phone_number
-    
+
     def vk_token(self) -> str:
         load_dotenv(dotenv_path=self._env_file)
         vk_token = os.getenv("VK_TOKEN")
