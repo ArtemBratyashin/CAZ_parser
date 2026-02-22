@@ -27,9 +27,9 @@ class EnvConfig:
             raise ValueError("MY_CHAT_ID is missing")
         return int(chat_id)
 
-    def db_path(self) -> str:
+    def db_dsn(self) -> str:
         load_dotenv(dotenv_path=self._env_file)
-        db_path = os.getenv("DB_PATH", "departments.sqlite3")
+        db_path = os.getenv("DB_DSN")
         return db_path
 
     def tg_api_id(self) -> int:
