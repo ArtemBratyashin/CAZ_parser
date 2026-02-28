@@ -1,4 +1,5 @@
 import os
+import sys
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -9,6 +10,11 @@ from src.models.department import Base
 load_dotenv()
 
 config = context.config
+
+os.environ["PGCLIENTENCODING"] = "utf8"
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 
 db_url = os.getenv("DB_DSN")
 if db_url:
