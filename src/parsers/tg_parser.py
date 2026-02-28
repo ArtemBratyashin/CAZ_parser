@@ -113,7 +113,7 @@ class TelegramParser:
                         "source_name": source["source_name"],
                         "source_link": source["source_link"],
                         "contact": source["contact"],
-                        "date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
+                        "date": message.date.strftime("%Y-%m-%d"),
                         "message": message.text[:100],
                     }
                 )

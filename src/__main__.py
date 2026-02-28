@@ -3,9 +3,9 @@ import logging
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
+# from excel_file import ExcelFile
 from config import EnvConfig
-from excel_file import ExcelFile
-#from database import Database
+from database import Database
 from parser_manager import ParserManager
 from parsers.tg_parser import TelegramParser
 from parsers.vk_parser import VkParser
@@ -32,9 +32,10 @@ if __name__ == "__main__":
             # web_parser=WebsiteParser() необходимо доработать класс для парсинга сайтов
         ),
         composer=TextComposer(message_len=200),
-        database=ExcelFile(filename='temp_sources.xlsx'),
-        #database=Database(dsn=EnvConfig().db_dsn()),
-        daily_time=datetime.time(23, 15, tzinfo=ZoneInfo("Europe/Moscow")),
+        database=Database(
+            dsn=EnvConfig().db_dsn()
+        ),  # database=ExcelFile(filename='temp_sources.xlsx'), - для работы через эксель файл
+        daily_time=datetime.time(21, 42, tzinfo=ZoneInfo("Europe/Moscow")),
     )
 
     bot.run()

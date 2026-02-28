@@ -113,7 +113,7 @@ class VkParser:
                             "source_name": source["source_name"],
                             "source_link": source["source_link"],
                             "contact": source.get("contact"),
-                            "date": post_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                            "date": post_dt.strftime("%Y-%m-%d"),
                             "message": text[:100],
                         }
                     )
