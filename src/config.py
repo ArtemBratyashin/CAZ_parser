@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 
 
 class EnvConfig:
+    '''
+    Класс для управления переменными окружения.
+
+    Example:
+        db_dsn = EnvConfig(env_file=".env").db_dsn()
+    '''
+
     def __init__(self, env_file: str = None) -> None:
         '''Загружает переменные окружения из указанного файла .env или из системных переменных.'''
         load_dotenv(dotenv_path=env_file)
