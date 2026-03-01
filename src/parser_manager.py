@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 import logging
 from typing import Dict, List, Tuple
 
@@ -22,14 +23,14 @@ class ParserManager:
         self._vk = vk_parser
         self._web = web_parser
 
-    async def parse(self, sources: List[Dict]) -> List[Dict]:
+    async def parse(self, sources: List[Dict], max_date: date) -> List[Dict]:
         """
         Делит источники по типам.
         Создаёт список корутин для включённых парсеров.
         Склеивает результаты в один массив словарей.
         """
         tg_sources, vk_sources, web_sources = self._split_sources(sources)
-        tasks = self._build_tasks(tg_sources, vk_sources, web_sources)
+        tasks = self._build_tasks(tg_sources, vk_sources, web_sources, max_date)
         if not tasks:
             return []
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -72,7 +73,7 @@ class ParserManager:
             "last_message_date": s.get("last_message_date"),
         }
 
-    def _build_tasks(self, tg_sources: List[Dict], vk_sources: List[Dict], web_sources: List[Dict]) -> List:
+    def _build_tasks(self, tg_sources: List[Dict], vk_sources: List[Dict], web_sources: List[Dict], max_date: date) -> List:
         """Создаёт список корутин только для включённых парсеров."""
         tasks = []
 
@@ -80,19 +81,19 @@ class ParserManager:
             if self._tg is None:
                 logger.warning("TG parser disabled: skipping %s sources", len(tg_sources))
             else:
-                tasks.append(self._tg.parse(tg_sources))
+                tasks.append(self._tg.parse(tg_sources, max_date=max_date))
 
         if vk_sources:
             if self._vk is None:
                 logger.warning("VK parser disabled: skipping %s sources", len(vk_sources))
             else:
-                tasks.append(self._vk.parse(vk_sources))
+                tasks.append(self._vk.parse(vk_sources, max_date=max_date))
 
         if web_sources:
             if self._web is None:
                 logger.warning("WEB parser disabled: skipping %s sources", len(web_sources))
             else:
-                tasks.append(self._web.parse(web_sources))
+                tasks.append(self._web.parse(web_sources, max_date=max_date))
 
         return tasks
 

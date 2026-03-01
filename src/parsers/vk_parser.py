@@ -24,7 +24,7 @@ class VkParser:
         self._vk = self._vk_session.get_api()
         logger.info("✅ VK клиент инициализирован")
 
-    async def parse(self, sources: List[Dict]) -> List[Dict]:
+    async def parse(self, sources: List[Dict], max_date: date) -> List[Dict]:
         """Обертка для совместимости с ParserManager"""
         try:
             self._ensure_client()
@@ -32,7 +32,7 @@ class VkParser:
             logger.info("📊 Парсинг %d VK групп", len(sources))
 
             for source in sources:
-                group_news = await self._parse_single_group(source)
+                group_news = await self._parse_single_group(source, max_date=max_date)
                 results.extend(group_news)
 
             return results
@@ -40,13 +40,12 @@ class VkParser:
             logger.error("❌ Критическая ошибка VK: %s", e)
             return []
 
-    async def _parse_single_group(self, source: Dict) -> List[Dict]:
+    async def _parse_single_group(self, source: Dict, max_date: date) -> List[Dict]:
         """Логика парсинга одной группы (синхронные запросы внутри)"""
         results = []
         try:
             group_id = self._extract_group_identifier(source["source_link"])
-            last_date_str = source.get("last_message_date")
-            last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
+            last_date = source.get("last_message_date")
 
             params = {
                 "count": 50,
@@ -77,7 +76,7 @@ class VkParser:
                         stop = True
                         break
 
-                    if self._max_date and post_date > self._max_date:
+                    if max_date and post_date > max_date:
                         continue
 
                     text = (post.get("text") or "").strip()

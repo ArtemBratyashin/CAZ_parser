@@ -27,7 +27,7 @@ class TelegramParser:
         self._client: Optional[TelegramClient] = None
         self._max_date = max_date
 
-    async def parse(self, sources: List[Dict]) -> List[Dict]:
+    async def parse(self, sources: List[Dict], max_date: date) -> List[Dict]:
         '''Основной метод: подключается к TG и перебирает список источников.'''
         try:
             await self._ensure_client()
@@ -36,7 +36,7 @@ class TelegramParser:
             logger.info("📊 Начинаю парсинг %d TG каналов", len(sources))
 
             for source in sources:
-                channel_news = await self._parse_single_channel(source)
+                channel_news = await self._parse_single_channel(source, max_date=max_date)
                 all_results.extend(channel_news)
 
             logger.info("✅ TG парсинг завершён. Найдено новых сообщений: %d", len(all_results))
@@ -70,15 +70,14 @@ class TelegramParser:
                     raise e
             logger.info("✅ Авторизация успешно завершена")
 
-    async def _parse_single_channel(self, source: Dict) -> List[Dict]:
+    async def _parse_single_channel(self, source: Dict, max_date: date) -> List[Dict]:
         '''Парсинг конкретного канала.'''
         results = []
         try:
             channel_link = source["source_link"]
             source_name = source["source_name"]
 
-            last_date_str = source.get("last_message_date")
-            last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
+            last_date = source.get("last_message_date")
 
             logger.info("🔍 Проверяю канал: %s (после %s)", source_name, last_date)
 
@@ -91,7 +90,7 @@ class TelegramParser:
                 if msg_date <= last_date:
                     break
 
-                if self._max_date and msg_date > self._max_date:
+                if max_date and msg_date > max_date:
                     continue
 
                 results.append(

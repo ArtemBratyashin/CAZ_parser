@@ -60,7 +60,7 @@ class WriterBot:
         '''Собирает из базы данных список источников, парсит их через parser_manager, составляет сообщение и отправляет в чат'''
         try:
             sources = self._database.sources()
-            messages_list, errors = await self._parser.parse(sources)
+            messages_list, errors = await self._parser.parse(sources, max_date=dt.date.today() - dt.timedelta(days=1))
 
             if errors:
                 error_report = "⚠️ Проблемы при парсинге источников:\n\n" + "\n".join(errors)

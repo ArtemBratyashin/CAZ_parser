@@ -22,10 +22,9 @@ if __name__ == "__main__":
         api_hash=config.tg_api_hash(),
         phone_number=config.phone_number(),
         session_name="user_session",
-        max_date=date.today() - timedelta(days=1),
     )
 
-    vk_parser = VkParser(token=config.vk_token(), session_name="vk_session", max_date=date.today() - timedelta(days=1))
+    vk_parser = VkParser(token=config.vk_token(), session_name="vk_session")
 
     bot = WriterBot(
         token=config.writer_token(),
@@ -40,7 +39,7 @@ if __name__ == "__main__":
         database=Database(
             dsn=config.db_dsn()
         ),  # database=ExcelFile(filename='temp_sources.xlsx'), - для работы через эксель файл
-        daily_time=datetime.time(21, 42, tzinfo=ZoneInfo("Europe/Moscow")),
+        daily_time=datetime.time(22, 24, tzinfo=ZoneInfo("Europe/Moscow")),
     )
 
     bot.run()
