@@ -29,24 +29,18 @@ class ParserManager:
         Склеивает результаты в один массив словарей.
         """
         tg_sources, vk_sources, web_sources = self._split_sources(sources)
-
         tasks = self._build_tasks(tg_sources, vk_sources, web_sources)
-
         if not tasks:
             return []
-
-        # Запускаем корутины конкурентно
         results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Объединяем результаты
         messages = []
+        errors = []
         for result in results:
             if isinstance(result, Exception):
-                logger.error("Parser failed: %s", result)
-                continue
-            messages.extend(result)
-
-        return messages
+                errors.append(f"Ошибка парсера: {str(result)}")
+            else:
+                messages.extend(result)
+        return messages, errors
 
     def _split_sources(self, sources: List[Dict]) -> Tuple[List[Dict], List[Dict], List[Dict]]:
         """Делит входные sources по source_type на 3 списка: tg/vk/web."""

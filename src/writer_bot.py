@@ -1,6 +1,7 @@
 import asyncio
 import datetime as dt
 import logging
+from xml.parsers.expat import errors
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -61,29 +62,26 @@ class WriterBot:
         '''Собирает из базы данных список источников, парсит их через parser_manager, составляет сообщение и отправляет в чат'''
         try:
             sources = self._database.sources()
-            messages_list = await self._parser.parse(sources)
+            messages_list, errors = await self._parser.parse(sources)
 
-            if not messages_list:
-                await context.bot.send_message(chat_id=self._chat_id, text="Новых новостей не найдено.")
-                return
+            if errors:
+                error_report = "⚠️ Проблемы при парсинге источников:\n\n" + "\n".join(errors)
+                await context.bot.send_message(chat_id=self._chat_id_errors, text=error_report)
+                logger.warning("Отчет об ошибках парсинга отправлен в чат ошибок")
 
-            full_text = self._composer.compose(messages_list)
-            parts = [full_text[i : i + 4000] for i in range(0, len(full_text), 4000)]
+            text = self._composer.compose(messages_list)
 
-            for part in parts:
-                await context.bot.send_message(
-                    chat_id=self._chat_id,
-                    text=part,
-                )
-                await asyncio.sleep(0.5)
-
+            await context.bot.send_message(
+                chat_id=self._chat_id,
+                text=text,
+                parse_mode=None,
+            )
             logger.info("✅ Ежедневное сообщение отправлено")
             self._database.update_dates(messages=messages_list)
 
-        except Exception as e:
-            error_msg = f"❌ Ошибка в daily_digest:\n{str(e)}"
-            logger.exception(error_msg)
-            await context.bot.send_message(chat_id=self._chat_id_errors, text=error_msg)
+        except Exception:
+            logger.exception("❌ Возникла ошибка при отправке ежедневного сообщения")
+            await context.bot.send_message(chat_id=self._chat_id_errors, text='⚠️ Ошибка при отправке ежедневного сообщения!')
 
     async def shutdown(self, application: Application) -> None:
         """Корректное завершение: закрываем внешние async-ресурсы."""

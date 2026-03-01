@@ -8,6 +8,10 @@ from models.department import Department
 
 
 class Database:
+    '''
+    Класс для работы с базой данных. Он использует SQLAlchemy для взаимодействия с базой данных.
+    '''
+
     def __init__(self, dsn: str) -> None:
         """Принимает DSN (строку подключения) при инициализации."""
         self.engine = create_engine(dsn)
@@ -28,14 +32,14 @@ class Database:
                 ]
 
                 for link, s_type in links:
-                    if link and link != "-":
+                    if link and str(link).strip() not in ("", "-"):
                         result.append(
                             {
                                 "source_name": dep.name,
                                 "source_link": link,
                                 "source_type": s_type,
                                 "contact": dep.contact,
-                                "last_message_date": dep.last_news_date.isoformat() if dep.last_news_date else "",
+                                "last_message_date": dep.last_news_date,
                             }
                         )
             return result
@@ -45,12 +49,10 @@ class Database:
         with self.Session() as session:
             for m in messages:
                 name = m.get("source_name")
-                new_date_str = m.get("date")
+                new_date = m.get("date")
 
-                if not name or not new_date_str:
+                if not name or not isinstance(new_date, dt.date):
                     continue
-
-                new_date = dt.datetime.strptime(new_date_str, "%Y-%m-%d").date()
 
                 stmt = (
                     update(Department)
