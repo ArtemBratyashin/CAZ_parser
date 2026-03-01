@@ -48,7 +48,7 @@ class TextComposer:
         try:
             sorted_list = sorted(
                 messages,
-                key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d %H:%M:%S"),
+                key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"),
                 reverse=True,
             )
             logger.info("📊 Сообщения отсортированы по дате")
@@ -60,7 +60,7 @@ class TextComposer:
     def _format_message(self, msg: Dict) -> str:
         '''Форматирует одну новость в красивый вид (только первые 100 символов).'''
         try:
-            message_date = datetime.strptime(msg["date"], "%Y-%m-%d %H:%M:%S").strftime("%d.%m.%Y")
+            message_date = datetime.strptime(msg["date"], "%Y-%m-%d").strftime("%d.%m.%Y")
         except (ValueError, KeyError, TypeError):
             message_date = msg.get("date", "неизвестно")
 
@@ -69,15 +69,15 @@ class TextComposer:
         preview = raw[: self._message_len] if raw else "[нет текста]"
 
         formatted = (
-            f"---------\n📚 {msg.get('source_name', '—')}\n"
+            f"━━━━━━━━━━━━━\n📚 {msg.get('source_name', '—')}\n"
             f"🔗 Источник: {msg.get('source_link', '—')}\n"
             f"👤 Контакт: {msg.get('contact', '—')}\n"
             f"📅 Дата: {message_date}\n"
-            f"📝 Новость: {preview}\n---------\n"
+            f"📝 Новость: {preview}\n━━━━━━━━━━━━━\n"
         )
         return formatted
 
     def _format_statistics(self, messages) -> str:
         '''Формирует статистику по количеству новостей.'''
         total = len(messages)
-        return f"---------\n✅ Всего новостей: {total}\n"
+        return f"━━━━━━━━━━━━━\n✅ Всего новостей: {total}\n"
