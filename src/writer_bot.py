@@ -1,3 +1,4 @@
+import asyncio
 import datetime as dt
 import logging
 
@@ -14,17 +15,20 @@ class WriterBot:
     Каждый день в определенное сообщение формируется и отправляется в выбранный чат.
     '''
 
-    def __init__(self, token: str, chat_id: int, database, parser, composer, daily_time: dt.time) -> None:
+    def __init__(
+        self, token: str, chat_id: int, chat_id_errors: int, database, parser, composer, daily_time: dt.time
+    ) -> None:
         '''Инициализируем бота'''
         self._token = token
         self._chat_id = chat_id
+        self._chat_id_errors = chat_id_errors
         self._database = database
         self._parser = parser
         self._composer = composer
         self._daily_time = daily_time or dt.time(hour=17, minute=0)
 
     def run(self) -> None:
-        '''Активирует бота'''
+        '''Запуск бота'''
         application = (
             Application.builder().token(self._token).post_init(self.daily_sender).post_shutdown(self.shutdown).build()
         )
@@ -58,23 +62,30 @@ class WriterBot:
         try:
             sources = self._database.sources()
             messages_list = await self._parser.parse(sources)
-            text = self._composer.compose(messages_list)
 
-            await context.bot.send_message(
-                chat_id=self._chat_id,
-                text=text,
-                parse_mode=None,
-            )
+            if not messages_list:
+                await context.bot.send_message(chat_id=self._chat_id, text="Новых новостей не найдено.")
+                return
+
+            full_text = self._composer.compose(messages_list)
+            parts = [full_text[i : i + 4000] for i in range(0, len(full_text), 4000)]
+
+            for part in parts:
+                await context.bot.send_message(
+                    chat_id=self._chat_id,
+                    text=part,
+                )
+                await asyncio.sleep(0.5)
+
             logger.info("✅ Ежедневное сообщение отправлено")
             self._database.update_dates(messages=messages_list)
-        except Exception:
-            logger.exception("❌ Возникла ошибка при отправке ежедневного сообщения")
+
+        except Exception as e:
+            error_msg = f"❌ Ошибка в daily_digest:\n{str(e)}"
+            logger.exception(error_msg)
+            await context.bot.send_message(chat_id=self._chat_id_errors, text=error_msg)
 
     async def shutdown(self, application: Application) -> None:
         """Корректное завершение: закрываем внешние async-ресурсы."""
-        try:
-            if hasattr(self._parser, "disconnect"):
-                await self._parser.disconnect()
-                logger.info("✅ ParserManager disconnected")
-        except Exception:
-            logger.exception("❌ Ошибка при shutdown: не удалось отключить parser")
+        await self._parser.disconnect()
+        logger.info("✅ ParserManager disconnected")

@@ -13,27 +13,32 @@ from text_composer import TextComposer
 from writer_bot import WriterBot
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    config = EnvConfig()
+
+    tg_parser = TelegramParser(
+        api_id=config.tg_api_id(),
+        api_hash=config.tg_api_hash(),
+        phone_number=config.phone_number(),
+        session_name="user_session",
+        max_date=date.today() - timedelta(days=1),
+    )
+
+    vk_parser = VkParser(token=config.vk_token(), session_name="vk_session", max_date=date.today() - timedelta(days=1))
 
     bot = WriterBot(
-        token=EnvConfig().writer_token(),
-        chat_id=EnvConfig().chat_id(),
+        token=config.writer_token(),
+        chat_id=config.chat_id(),
+        chat_id_errors=config.chat_id_errors(),
         parser=ParserManager(
-            tg_parser=TelegramParser(
-                api_id=EnvConfig().tg_api_id(),
-                api_hash=EnvConfig().tg_api_hash(),
-                phone_number=EnvConfig().phone_number(),
-                session_name="user_session",
-                max_date=date.today() - timedelta(days=1),
-            ),
-            vk_parser=VkParser(
-                token=EnvConfig().vk_token(), session_name="vk_session", max_date=date.today() - timedelta(days=1)
-            ),
+            tg_parser=tg_parser,
+            vk_parser=vk_parser,
             # web_parser=WebsiteParser() необходимо доработать класс для парсинга сайтов
         ),
         composer=TextComposer(message_len=200),
         database=Database(
-            dsn=EnvConfig().db_dsn()
+            dsn=config.db_dsn()
         ),  # database=ExcelFile(filename='temp_sources.xlsx'), - для работы через эксель файл
         daily_time=datetime.time(21, 42, tzinfo=ZoneInfo("Europe/Moscow")),
     )

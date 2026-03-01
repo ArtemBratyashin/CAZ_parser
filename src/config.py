@@ -17,6 +17,7 @@ class EnvConfig:
 
         self._writer_token = self._get_required("WRITER_TOKEN")
         self._chat_id = int(self._get_required("MY_CHAT_ID"))
+        self._chat_id_errors = int(self._get_required("CHAT_ID_ERRORS"))
         self._db_dsn = os.getenv("DB_DSN")
         self._tg_api_id = self._get_required("TG_API_ID")
         self._tg_api_hash = self._get_required("TG_API_HASH")
@@ -35,6 +36,9 @@ class EnvConfig:
 
     def chat_id(self) -> int:
         return self._chat_id
+
+    def chat_id_errors(self) -> int:
+        return self._chat_id_errors
 
     def db_dsn(self) -> str:
         return self._db_dsn
