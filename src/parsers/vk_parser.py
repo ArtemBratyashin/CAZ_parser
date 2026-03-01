@@ -6,13 +6,10 @@ import vk_api
 
 logger = logging.getLogger(__name__)
 
+
 class VkParser:
     def __init__(
-        self, 
-        token: str, 
-        session_name: str = "vk_session", 
-        max_date: Optional[date] = None, 
-        api_version: str = "5.199"
+        self, token: str, session_name: str = "vk_session", max_date: Optional[date] = None, api_version: str = "5.199"
     ):
         self._token = token
         self._vk_session: Optional[vk_api.VkApi] = None
@@ -89,13 +86,15 @@ class VkParser:
 
                     clean_text = " ".join(text.split())
 
-                    results.append({
-                        "source_name": source["source_name"],
-                        "source_link": source["source_link"],
-                        "contact": source.get("contact"),
-                        "date": post_dt.strftime("%Y-%m-%d"),
-                        "message": clean_text,
-                    })
+                    results.append(
+                        {
+                            "source_name": source["source_name"],
+                            "source_link": source["source_link"],
+                            "contact": source.get("contact"),
+                            "date": post_dt.strftime("%Y-%m-%d"),
+                            "message": clean_text,
+                        }
+                    )
 
                 if stop:
                     break
@@ -103,7 +102,7 @@ class VkParser:
 
         except Exception as e:
             logger.error("❌ Ошибка в группе %s: %s", source.get("source_name"), e)
-        
+
         return results
 
     async def disconnect(self) -> None:
@@ -112,6 +111,8 @@ class VkParser:
     @staticmethod
     def _extract_group_identifier(url: str) -> str:
         last = url.rstrip("/").split("/")[-1]
-        if last.startswith("public"): return last[6:]
-        if last.startswith("club"): return last[4:]
+        if last.startswith("public"):
+            return last[6:]
+        if last.startswith("club"):
+            return last[4:]
         return last

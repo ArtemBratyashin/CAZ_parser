@@ -1,7 +1,5 @@
-import asyncio
 import datetime as dt
 import logging
-from xml.parsers.expat import errors
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -81,7 +79,9 @@ class WriterBot:
 
         except Exception:
             logger.exception("❌ Возникла ошибка при отправке ежедневного сообщения")
-            await context.bot.send_message(chat_id=self._chat_id_errors, text='⚠️ Ошибка при отправке ежедневного сообщения!')
+            await context.bot.send_message(
+                chat_id=self._chat_id_errors, text='⚠️ Ошибка при отправке ежедневного сообщения!'
+            )
 
     async def shutdown(self, application: Application) -> None:
         """Корректное завершение: закрываем внешние async-ресурсы."""

@@ -6,6 +6,7 @@ from telethon import TelegramClient
 
 logger = logging.getLogger(__name__)
 
+
 class TelegramParser:
     '''
     Парсер для получения новостей из Telegram каналов через Telethon (UserBot).
@@ -56,7 +57,7 @@ class TelegramParser:
         if not await self._client.is_user_authorized():
             logger.info("🔐 Требуется авторизация в Telegram...")
             await self._client.send_code_request(self._phone_number)
-            
+
             code = input(f"🔐 Введите код из Telegram для номера {self._phone_number}: ").strip()
 
             try:
@@ -75,7 +76,7 @@ class TelegramParser:
         try:
             channel_link = source["source_link"]
             source_name = source["source_name"]
-            
+
             last_date_str = source.get("last_message_date")
             last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
 
@@ -93,17 +94,19 @@ class TelegramParser:
                 if self._max_date and msg_date > self._max_date:
                     continue
 
-                results.append({
-                    "source_name": source_name,
-                    "source_link": channel_link,
-                    "contact": source.get("contact"),
-                    "date": msg_date.strftime("%Y-%m-%d"),
-                    "message": message.text.replace('\n', ' '),
-                })
+                results.append(
+                    {
+                        "source_name": source_name,
+                        "source_link": channel_link,
+                        "contact": source.get("contact"),
+                        "date": msg_date.strftime("%Y-%m-%d"),
+                        "message": message.text.replace('\n', ' '),
+                    }
+                )
 
         except Exception as e:
             logger.error("❌ Ошибка при парсинге канала %s: %s", source.get("source_name"), e)
-        
+
         return results
 
     async def disconnect(self) -> None:
