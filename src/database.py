@@ -1,5 +1,6 @@
 import datetime as dt
 from typing import Dict, List
+from venv import logger
 
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
@@ -49,9 +50,18 @@ class Database:
         with self.Session() as session:
             for m in messages:
                 name = m.get("source_name")
-                new_date = m.get("date")
+                raw_date = m.get("date")
 
-                if not name or not isinstance(new_date, dt.date):
+                if isinstance(raw_date, str):
+                    try:
+                        new_date = dt.datetime.strptime(raw_date, "%Y-%m-%d").date()
+                    except ValueError:
+                        logger.error(f"❌ Неверный формат даты в сообщении: {raw_date}")
+                        continue
+                elif isinstance(raw_date, dt.date):
+                    new_date = raw_date
+                else:
+                    logger.warning(f"⚠️ Неподдерживаемый тип даты для {name}: {type(raw_date)}")
                     continue
 
                 stmt = (

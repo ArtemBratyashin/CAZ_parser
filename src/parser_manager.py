@@ -1,6 +1,6 @@
 import asyncio
-from datetime import date
 import logging
+from datetime import date
 from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,9 @@ class ParserManager:
             "last_message_date": s.get("last_message_date"),
         }
 
-    def _build_tasks(self, tg_sources: List[Dict], vk_sources: List[Dict], web_sources: List[Dict], max_date: date) -> List:
+    def _build_tasks(
+        self, tg_sources: List[Dict], vk_sources: List[Dict], web_sources: List[Dict], max_date: date
+    ) -> List:
         """Создаёт список корутин только для включённых парсеров."""
         tasks = []
 
