@@ -3,12 +3,12 @@ import os
 from dotenv import load_dotenv
 
 
-class EnvConfig:
+class Settings:
     '''
     Класс для управления переменными окружения.
 
     Example:
-        db_dsn = EnvConfig(env_file=".env").db_dsn()
+        db_dsn = Settings(env_file=".env").db_dsn()
     '''
 
     def __init__(self, env_file: str = None) -> None:
@@ -23,6 +23,8 @@ class EnvConfig:
         self._tg_api_hash = self._get_required("TG_API_HASH")
         self._phone_number = self._get_required("PHONE_NUMBER")
         self._vk_token = self._get_required("VK_TOKEN")
+        self._sending_hour = int(self._get_required("SENDING_HOUR"))
+        self._sending_minute = int(self._get_required("SENDING_MINUTES"))
 
     def _get_required(self, key: str) -> str:
         '''Получает и проверяет переменную окружения.'''
@@ -54,3 +56,9 @@ class EnvConfig:
 
     def vk_token(self) -> str:
         return self._vk_token
+
+    def sending_hour(self) -> int:
+        return self._sending_hour
+
+    def sending_minute(self) -> int:
+        return self._sending_minute

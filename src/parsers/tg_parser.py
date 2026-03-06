@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import date
 from typing import Dict, List, Optional
 
 from telethon import TelegramClient

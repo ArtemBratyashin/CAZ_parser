@@ -11,7 +11,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.models.department import Department
-from src.config import EnvConfig
+from src.settings import Settings
 
 def parse_date(date_value):
     """Безопасно превращает значение из Excel в объект даты."""
@@ -27,7 +27,7 @@ def parse_date(date_value):
         return datetime(2026, 1, 1).date()
 
 def seed_database():
-    config = EnvConfig()
+    config = Settings()
     engine = create_engine(config.db_dsn())
     Session = sessionmaker(bind=engine)
 
