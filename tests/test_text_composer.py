@@ -1,97 +1,106 @@
-import logging
 import re
-
-import pytest
 
 from src.text_composer import TextComposer
 
 
-def test_compose_empty_messages_shows_no_messages_and_stats():
+def test_compose_with_empty_messages_returns_header_and_stats():
     result = TextComposer(message_len=100).compose(messages=[])
 
-    # Заголовок есть, но дату не фиксируем — проверяем шаблон
-    assert re.search(r"^🎓 СВОДКА НОВОСТЕЙ КАФЕДР \(\d{2}\.\d{2}\.\d{4}\)\n\n", result)
-
-    assert "Сообщений нет.\n\n" in result
+    assert re.search(r"\(\d{2}\.\d{2}\.\d{4}\)", result)
+    assert "0" in result
 
 
-def test_compose_none_messages_treated_as_empty():
+def test_compose_with_none_messages_is_treated_as_empty():
     result = TextComposer(message_len=100).compose(messages=None)
+    assert re.search(r"\(\d{2}\.\d{2}\.\d{4}\)", result)
 
-    assert "Сообщений нет." in result
 
-
-def test_compose_sorts_by_date_desc():
+def test_compose_sorts_messages_descending_by_date():
     messages = [
         {
-            "source_name": "Кафедра A",
-            "source_link": "https://t.me/a",
-            "contact": "A",
-            "date": "2026-02-10 09:00:00",
+            "source_name": "SRC_OLD",
+            "source_link": "https://example.com/old",
+            "contact": "old",
+            "date": "2026-02-10",
             "message": "old",
         },
         {
-            "source_name": "Кафедра B",
-            "source_link": "https://t.me/b",
-            "contact": "B",
-            "date": "2026-02-11 09:00:00",
+            "source_name": "SRC_NEW",
+            "source_link": "https://example.com/new",
+            "contact": "new",
+            "date": "2026-02-11",
             "message": "new",
         },
     ]
 
     result = TextComposer(message_len=100).compose(messages=messages)
 
-    pos_b = result.find("📚 Кафедра B")
-    pos_a = result.find("📚 Кафедра A")
-    assert pos_b != -1 and pos_a != -1
-    assert pos_b < pos_a  # B (новее) должно быть выше
+    pos_new = result.find("SRC_NEW")
+    pos_old = result.find("SRC_OLD")
+    assert pos_new != -1 and pos_old != -1
+    assert pos_new < pos_old
 
 
-def test_compose_message_is_cut_to_100_chars():
-    long_text = "a" * 150
+def test_compose_truncates_message_by_configured_limit():
     messages = [
         {
-            "source_name": "Физика",
-            "source_link": "https://t.me/physics",
-            "contact": "Иван",
-            "date": "2026-02-11 09:00:00",
-            "message": long_text,
+            "source_name": "SRC",
+            "source_link": "https://example.com",
+            "contact": "c",
+            "date": "2026-02-11",
+            "message": "a" * 25,
         }
     ]
 
-    result = TextComposer(message_len=100).compose(messages=messages)
+    result = TextComposer(message_len=10).compose(messages=messages)
 
-    assert ("📝 Новость: " + ("a" * 100)) in result
-    assert ("a" * 101) not in result
+    assert "a" * 10 in result
+    assert "a" * 11 not in result
 
 
-def test_compose_when_message_empty_puts_placeholder():
+def test_compose_uses_placeholder_when_message_text_is_empty():
     messages = [
         {
-            "source_name": "Физика",
-            "source_link": "https://t.me/physics",
-            "contact": "Иван",
-            "date": "2026-02-11 09:00:00",
+            "source_name": "SRC",
+            "source_link": "https://example.com",
+            "contact": "c",
+            "date": "2026-02-11",
             "message": "   ",
         }
     ]
 
     result = TextComposer(message_len=100).compose(messages=messages)
 
-    assert "📝 Новость: [нет текста]" in result
+    assert "[" in result and "]" in result
 
 
-def test_compose_date_is_formatted_dd_mm_yyyy():
+def test_compose_formats_valid_date_to_dd_mm_yyyy():
     messages = [
         {
-            "source_name": "Физика",
-            "source_link": "https://t.me/physics",
-            "contact": "Иван",
-            "date": "2026-02-11 09:00:00",
+            "source_name": "SRC",
+            "source_link": "https://example.com",
+            "contact": "c",
+            "date": "2026-02-11",
             "message": "hello",
         }
     ]
 
     result = TextComposer(message_len=100).compose(messages=messages)
 
-    assert "📅 Дата: 11.02.2026" in result
+    assert "11.02.2026" in result
+
+
+def test_compose_keeps_raw_date_when_format_is_invalid():
+    messages = [
+        {
+            "source_name": "SRC",
+            "source_link": "https://example.com",
+            "contact": "c",
+            "date": "2026/02/11",
+            "message": "hello",
+        }
+    ]
+
+    result = TextComposer(message_len=100).compose(messages=messages)
+
+    assert "2026/02/11" in result

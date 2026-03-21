@@ -1,129 +1,145 @@
-import random
-import string
+from datetime import date, datetime
 
 import pytest
 
-import src.parsers.tg_parser as tp
+import src.parsers.tg_parser as tg_module
 from src.parsers.tg_parser import TelegramParser
 
 
 pytestmark = pytest.mark.anyio
 
 
-def _nonce() -> str:
-    return "".join(random.choice(string.ascii_letters) for _ in range(10))
-
-
 class _FakeMessage:
-    def __init__(self, msg_id: int, date, text: str) -> None:
-        self.id = msg_id
-        self.date = date
+    def __init__(self, dt_value, text):
+        self.date = dt_value
         self.text = text
 
 
 class _FakeTelegramClient:
-    def __init__(self, session_name: str, api_id: int, api_hash: str) -> None:
+    def __init__(self, session_name, api_id, api_hash):
+        self.session_name = session_name
+        self.api_id = api_id
+        self.api_hash = api_hash
         self._connected = False
         self._authorized = True
-        self._disconnects = 0
-        self._messages_by_channel = {}
+        self._disconnect_calls = 0
+        self._messages = {}
 
-    async def connect(self) -> None:
+    async def connect(self):
         self._connected = True
 
-    async def disconnect(self) -> None:
-        self._disconnects += 1
+    async def disconnect(self):
+        self._disconnect_calls += 1
 
-    async def is_user_authorized(self) -> bool:
+    async def is_user_authorized(self):
         return self._authorized
 
-    async def send_code_request(self, phone) -> None:
-        raise AssertionError("send_code_request must not be called in unit tests")
+    async def send_code_request(self, phone):
+        raise AssertionError("unexpected auth call in unit test")
 
     async def sign_in(self, *args, **kwargs):
-        raise AssertionError("sign_in must not be called in unit tests")
+        raise AssertionError("unexpected auth call in unit test")
 
-    def set_messages(self, channel: str, messages) -> None:
-        self._messages_by_channel[channel] = list(messages)
-
-    def iter_messages(self, channel_username: str, reverse=False):
-        async def _gen():
-            for m in self._messages_by_channel.get(channel_username, []):
-                yield m
-
-        return _gen()
-
-    def is_connected(self) -> bool:
+    def is_connected(self):
         return self._connected
 
-    def disconnect_calls(self) -> int:
-        return self._disconnects
+    def set_messages(self, channel_link, messages):
+        self._messages[channel_link] = list(messages)
+
+    def iter_messages(self, channel_link, limit=50):
+        async def _generator():
+            for message in self._messages.get(channel_link, []):
+                yield message
+
+        return _generator()
+
+    def disconnect_calls(self):
+        return self._disconnect_calls
 
 
-async def test_extract_channel_name_works_for_tme_link():
-    assert TelegramParser._extract_channel_name("https://t.me/theorphys_seminar") == "theorphys_seminar"
-
-
-async def test_ensure_client_creates_client_and_connects(monkeypatch):
-    fake_client = _FakeTelegramClient("s", 1, "h")
+async def test_ensure_client_creates_and_connects_client(monkeypatch):
+    fake_client = _FakeTelegramClient("session", 1, "hash")
 
     def _factory(session_name, api_id, api_hash):
         return fake_client
 
-    monkeypatch.setattr(tp, "TelegramClient", _factory)
+    monkeypatch.setattr(tg_module, "TelegramClient", _factory)
 
-    parser = TelegramParser(api_id=1, api_hash="h", phone_number="+79990000000", session_name="s")
+    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
     await parser._ensure_client()
 
     assert parser._client is fake_client
+    assert fake_client.is_connected() is True
 
 
-async def test_parse_single_channel_collects_only_messages_newer_than_last_date(monkeypatch):
-    fake_client = _FakeTelegramClient("s", 1, "h")
+async def test_ensure_client_reuses_existing_connected_client(monkeypatch):
+    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+    existing = _FakeTelegramClient("session", 1, "hash")
+    existing._connected = True
+    parser._client = existing
 
-    from datetime import datetime
+    def _boom(*args, **kwargs):
+        raise AssertionError("new client should not be created")
 
-    channel = "chan"
+    monkeypatch.setattr(tg_module, "TelegramClient", _boom)
+
+    await parser._ensure_client()
+
+    assert parser._client is existing
+
+
+async def test_parse_single_channel_collects_only_messages_after_last_date_and_not_after_max_date():
+    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+    fake_client = _FakeTelegramClient("session", 1, "hash")
+    parser._client = fake_client
+
+    channel_link = "https://t.me/channel_name"
     fake_client.set_messages(
-        channel,
+        channel_link,
         [
-            _FakeMessage(1, datetime(2026, 2, 15, 10, 0, 0), "новое 1"),
-            _FakeMessage(2, datetime(2026, 2, 14, 10, 0, 0), "новое 2"),
-            _FakeMessage(3, datetime(2026, 2, 13, 10, 0, 0), "старое"),  # должно остановить цикл (break)
-            _FakeMessage(4, datetime(2026, 2, 16, 10, 0, 0), "не должно дойти"),
+            _FakeMessage(datetime(2026, 2, 16, 10, 0, 0), "too new"),
+            _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "new one"),
+            _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "new two"),
+            _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "old stop"),
+            _FakeMessage(datetime(2026, 2, 12, 10, 0, 0), "must not be reached"),
         ],
     )
 
-    parser = TelegramParser(api_id=1, api_hash="h", phone_number="+79990000000", session_name="s")
-    parser._client = fake_client
-
     source = {
-        "source_name": f"имя-{_nonce()}",
-        "source_link": f"https://t.me/{channel}",
-        "contact": f"контакт-{_nonce()}",
-        "last_message_date": "2026-02-13",
+        "source_name": "department",
+        "source_link": channel_link,
+        "contact": "contact",
+        "last_message_date": date(2026, 2, 13),
     }
 
-    result = await parser._parse_single_channel(source)
+    result = await parser._parse_single_channel(source, max_date=date(2026, 2, 15))
 
     assert len(result) == 2
+    assert result[0]["date"] == "2026-02-15"
+    assert result[1]["date"] == "2026-02-14"
+    assert result[0]["message"] == "new one"
 
 
-async def test_parse_returns_empty_list_when_ensure_client_fails(monkeypatch):
+async def test_parse_reraises_when_client_initialization_fails(monkeypatch):
+    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+
     async def _boom():
-        raise RuntimeError(_nonce())
+        raise RuntimeError("failed to init client")
 
-    parser = TelegramParser(api_id=1, api_hash="h", phone_number="+79990000000", session_name="s")
     monkeypatch.setattr(parser, "_ensure_client", _boom)
 
-    assert await parser.parse([{"source_link": "https://t.me/x", "source_name": "x", "contact": "c", "last_message_date": "2026-02-01"}]) == []
+    with pytest.raises(RuntimeError, match="failed to init client"):
+        await parser.parse(
+            [{"source_name": "x", "source_link": "https://t.me/x", "contact": "c", "last_message_date": date(2026, 2, 1)}],
+            max_date=date(2026, 2, 15),
+        )
 
 
-async def test_disconnect_sets_client_to_none(monkeypatch):
-    fake_client = _FakeTelegramClient("s", 1, "h")
-    parser = TelegramParser(api_id=1, api_hash="h", phone_number="+79990000000", session_name="s")
+async def test_disconnect_calls_client_disconnect():
+    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+    fake_client = _FakeTelegramClient("session", 1, "hash")
     parser._client = fake_client
 
     await parser.disconnect()
 
-    assert parser._client is None
+    assert fake_client.disconnect_calls() == 1

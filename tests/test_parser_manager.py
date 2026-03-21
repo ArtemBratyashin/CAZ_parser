@@ -1,5 +1,4 @@
-import random
-import string
+from datetime import date
 
 import pytest
 
@@ -9,125 +8,95 @@ from src.parser_manager import ParserManager
 pytestmark = pytest.mark.anyio
 
 
-def _nonce() -> str:
-    return "".join(random.choice(string.ascii_letters) for _ in range(10))
+class _RecordingParser:
+    def __init__(self, payload):
+        self.payload = list(payload)
+        self.calls = []
 
-
-class _GoodParser:
-    def __init__(self, tag: str) -> None:
-        self._tag = tag
-
-    async def parse(self, sources):
-        return [
-            {
-                "source_name": f"источник-{self._tag}-{_nonce()}",
-                "source_link": f"https://example.com/{self._tag}/{_nonce()}",
-                "contact": f"контакт-{_nonce()}",
-                "date": "2026-02-15 12:34:56",
-                "message": f"сообщение-{self._tag}-{_nonce()}",
-            }
-        ]
+    async def parse(self, sources, max_date):
+        self.calls.append({"sources": list(sources), "max_date": max_date})
+        return list(self.payload)
 
 
 class _FailingParser:
-    async def parse(self, sources):
-        raise RuntimeError(_nonce())
+    async def parse(self, sources, max_date):
+        raise RuntimeError("boom")
 
 
 class _DisconnectingParser:
-    def __init__(self) -> None:
-        self._disconnected = False
+    def __init__(self):
+        self.disconnected = False
 
-    async def parse(self, sources):
+    async def parse(self, sources, max_date):
         return []
 
-    async def disconnect(self) -> None:
-        self._disconnected = True
-
-    def is_disconnected(self) -> bool:
-        return self._disconnected
+    async def disconnect(self):
+        self.disconnected = True
 
 
-async def test_it_returns_empty_list_when_no_sources_are_given():
-    assert await ParserManager(tg_parser=_GoodParser("tg")).parse([]) == []
+def _source(source_type, name):
+    return {
+        "source_name": name,
+        "source_link": f"https://example.com/{name}",
+        "source_type": source_type,
+        "contact": "contact",
+        "last_message_date": date(2026, 2, 1),
+    }
 
 
-async def test_it_skips_disabled_parser_when_sources_are_of_that_type():
-    sources = [
-        {
-            "source_name": f"имя-{_nonce()}",
-            "source_link": f"https://t.me/{_nonce()}",
-            "source_type": "tg",
-            "contact": f"контакт-{_nonce()}",
-            "last_message_date": "2026-02-01",
-        }
-    ]
-
-    assert await ParserManager(tg_parser=None).parse(sources) == []
+async def test_parse_returns_empty_list_when_no_sources():
+    parser = _RecordingParser(payload=[])
+    result = await ParserManager(tg_parser=parser).parse([], max_date=date(2026, 2, 15))
+    assert result == []
 
 
-async def test_it_merges_messages_from_multiple_parsers():
-    sources = [
-        {
-            "source_name": f"tg-{_nonce()}",
-            "source_link": f"https://t.me/{_nonce()}",
-            "source_type": "tg",
-            "contact": "не-ASCII контакт",
-            "last_message_date": "2026-02-01",
-        },
-        {
-            "source_name": f"vk-{_nonce()}",
-            "source_link": f"https://vk.com/{_nonce()}",
-            "source_type": "vk",
-            "contact": "не-ASCII контакт",
-            "last_message_date": "2026-02-01",
-        },
-        {
-            "source_name": f"web-{_nonce()}",
-            "source_link": f"https://example.org/{_nonce()}",
-            "source_type": "web",
-            "contact": "не-ASCII контакт",
-            "last_message_date": "2026-02-01",
-        },
-    ]
-
-    result = await ParserManager(
-        tg_parser=_GoodParser("tg"),
-        vk_parser=_GoodParser("vk"),
-        web_parser=_GoodParser("web"),
-    ).parse(sources)
-
-    assert len(result) == 3
+async def test_parse_skips_disabled_parser_and_returns_empty_list():
+    sources = [_source("tg", "tg_one")]
+    result = await ParserManager(tg_parser=None).parse(sources, max_date=date(2026, 2, 15))
+    assert result == []
 
 
-async def test_it_ignores_failing_parser_and_returns_messages_from_others():
-    sources = [
-        {
-            "source_name": f"tg-{_nonce()}",
-            "source_link": f"https://t.me/{_nonce()}",
-            "source_type": "tg",
-            "contact": f"контакт-{_nonce()}",
-            "last_message_date": "2026-02-01",
-        },
-        {
-            "source_name": f"vk-{_nonce()}",
-            "source_link": f"https://vk.com/{_nonce()}",
-            "source_type": "vk",
-            "contact": f"контакт-{_nonce()}",
-            "last_message_date": "2026-02-01",
-        },
-    ]
+async def test_parse_merges_messages_from_all_enabled_parsers():
+    tg = _RecordingParser([{"source_name": "tg", "date": "2026-02-12", "message": "t"}])
+    vk = _RecordingParser([{"source_name": "vk", "date": "2026-02-11", "message": "v"}])
+    web = _RecordingParser([{"source_name": "web", "date": "2026-02-10", "message": "w"}])
 
-    result = await ParserManager(
-        tg_parser=_GoodParser("tg"),
-        vk_parser=_FailingParser(),
-    ).parse(sources)
+    sources = [_source("tg", "tg_one"), _source("vk", "vk_one"), _source("web", "web_one")]
+    max_date = date(2026, 2, 15)
 
-    assert len(result) == 1
+    result = await ParserManager(tg_parser=tg, vk_parser=vk, web_parser=web).parse(sources, max_date=max_date)
+
+    assert isinstance(result, tuple)
+    messages, errors = result
+    assert len(messages) == 3
+    assert errors == []
+
+    assert tg.calls[0]["max_date"] == max_date
+    assert vk.calls[0]["max_date"] == max_date
+    assert web.calls[0]["max_date"] == max_date
+    assert len(tg.calls[0]["sources"]) == 1
+    assert len(vk.calls[0]["sources"]) == 1
+    assert len(web.calls[0]["sources"]) == 1
 
 
-async def test_it_can_disconnect_internal_tg_parser():
+async def test_parse_keeps_messages_and_collects_errors_from_failing_parsers():
+    tg = _RecordingParser([{"source_name": "tg", "date": "2026-02-12", "message": "ok"}])
+    vk = _FailingParser()
+    sources = [_source("tg", "tg_one"), _source("vk", "vk_one")]
+
+    messages, errors = await ParserManager(tg_parser=tg, vk_parser=vk).parse(sources, max_date=date(2026, 2, 15))
+
+    assert len(messages) == 1
+    assert len(errors) == 1
+    assert "boom" in errors[0]
+
+
+async def test_disconnect_calls_disconnect_on_internal_parsers():
     tg = _DisconnectingParser()
-    await ParserManager(tg_parser=tg).disconnect()
+    vk = _DisconnectingParser()
+    manager = ParserManager(tg_parser=tg, vk_parser=vk)
 
-    assert tg.is_disconnected()
+    await manager.disconnect()
+
+    assert tg.disconnected is True
+    assert vk.disconnected is True

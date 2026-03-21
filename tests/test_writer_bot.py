@@ -1,6 +1,4 @@
 import datetime as dt
-import random
-import string
 
 import pytest
 
@@ -10,15 +8,11 @@ from src.writer_bot import WriterBot
 pytestmark = pytest.mark.anyio
 
 
-def _nonce() -> str:
-    return "".join(random.choice(string.ascii_letters) for _ in range(10))
-
-
 class _FakeMessage:
-    def __init__(self) -> None:
+    def __init__(self):
         self._replies = []
 
-    async def reply_text(self, text: str) -> None:
+    async def reply_text(self, text):
         self._replies.append(text)
 
     def replies(self):
@@ -26,22 +20,22 @@ class _FakeMessage:
 
 
 class _FakeChat:
-    def __init__(self, chat_id: int, chat_type: str) -> None:
+    def __init__(self, chat_id, chat_type):
         self.id = chat_id
         self.type = chat_type
 
 
 class _FakeUpdate:
-    def __init__(self, message, chat) -> None:
+    def __init__(self, message, chat):
         self.message = message
         self.effective_chat = chat
 
 
 class _FakeBot:
-    def __init__(self) -> None:
+    def __init__(self):
         self._sent = []
 
-    async def send_message(self, chat_id: int, text: str, parse_mode=None) -> None:
+    async def send_message(self, chat_id, text, parse_mode=None):
         self._sent.append({"chat_id": chat_id, "text": text, "parse_mode": parse_mode})
 
     def sent(self):
@@ -49,17 +43,17 @@ class _FakeBot:
 
 
 class _FakeContext:
-    def __init__(self, bot: _FakeBot) -> None:
+    def __init__(self, bot):
         self.bot = bot
 
 
 class _FakeJob:
-    def __init__(self) -> None:
+    def __init__(self):
         self.next_run_time = None
 
 
 class _FakeJobQueue:
-    def __init__(self) -> None:
+    def __init__(self):
         self._calls = []
 
     def run_daily(self, callback, time, name=None, **kwargs):
@@ -71,27 +65,40 @@ class _FakeJobQueue:
 
 
 class _FakeApplication:
-    def __init__(self) -> None:
+    def __init__(self):
         self.job_queue = _FakeJobQueue()
 
 
 class _FakeParser:
     def __init__(self, result):
         self._result = result
+        self._calls = []
         self._disconnected = False
 
-    async def parse(self, sources):
+    async def parse(self, sources, max_date):
+        self._calls.append({"sources": list(sources), "max_date": max_date})
         return self._result
 
-    async def disconnect(self) -> None:
+    async def disconnect(self):
         self._disconnected = True
 
-    def is_disconnected(self) -> bool:
+    def calls(self):
+        return list(self._calls)
+
+    def is_disconnected(self):
         return self._disconnected
 
 
+class _RaisingParser:
+    async def parse(self, sources, max_date):
+        raise RuntimeError("parse failed")
+
+    async def disconnect(self):
+        return None
+
+
 class _FakeComposer:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text):
         self._text = text
         self._last_messages = None
 
@@ -101,122 +108,121 @@ class _FakeComposer:
 
     def last_messages(self):
         return self._last_messages
-    
+
+
 class _FakeDatabase:
     def __init__(self, sources):
-        self._sources = sources
-        self._updated_messages = None
+        self._sources = list(sources)
+        self._updated = None
 
     def sources(self):
         return list(self._sources)
 
     def update_dates(self, messages):
-        self._updated_messages = list(messages)
+        self._updated = list(messages)
+
+    def updated_messages(self):
+        return self._updated
 
 
-async def test_start_replies_greeting_when_message_exists():
-    msg = _FakeMessage()
-    update = _FakeUpdate(message=msg, chat=_FakeChat(chat_id=1, chat_type="private"))
-    bot = WriterBot(
-        token=_nonce(),
-        chat_id=123,
-        database=None,
-        parser=_FakeParser([]),
-        composer=_FakeComposer("x"),
-        daily_time=dt.time(hour=17, minute=0),
+def _build_bot(database, parser, composer, daily_time=dt.time(hour=17, minute=0)):
+    return WriterBot(
+        token="token",
+        chat_id=1001,
+        chat_id_errors=1002,
+        database=database,
+        parser=parser,
+        composer=composer,
+        daily_time=daily_time,
     )
+
+
+async def test_start_replies_when_message_exists():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+    bot = _build_bot(database=None, parser=_FakeParser(([], [])), composer=_FakeComposer("digest"))
 
     await bot.start(update, context=None)
 
-    assert len(msg.replies()) == 1
+    assert len(message.replies()) == 1
 
 
-async def test_my_id_replies_with_chat_id_and_chat_type():
-    chat_id = random.randint(10_000, 99_999)
-    chat_type = "group"
-    msg = _FakeMessage()
-    update = _FakeUpdate(message=msg, chat=_FakeChat(chat_id=chat_id, chat_type=chat_type))
-    bot = WriterBot(
-        token=_nonce(),
-        chat_id=chat_id,
-        database=None,
-        parser=_FakeParser([]),
-        composer=_FakeComposer("x"),
-        daily_time=dt.time(hour=17, minute=0),
-    )
+async def test_my_id_replies_with_chat_information():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=555, chat_type="group"))
+    bot = _build_bot(database=None, parser=_FakeParser(([], [])), composer=_FakeComposer("digest"))
 
     await bot.my_id(update, context=None)
 
-    assert str(chat_id) in msg.replies()[0]
+    assert "555" in message.replies()[0]
 
 
-async def test_daily_sender_schedules_job_with_given_time_and_name():
-    t = dt.time(hour=8, minute=30)
+async def test_daily_sender_registers_daily_digest_job():
+    schedule_time = dt.time(hour=8, minute=30)
     app = _FakeApplication()
-    bot = WriterBot(
-        token=_nonce(),
-        chat_id=1,
+    bot = _build_bot(
         database=None,
-        parser=_FakeParser([]),
-        composer=_FakeComposer("x"),
-        daily_time=t,
+        parser=_FakeParser(([], [])),
+        composer=_FakeComposer("digest"),
+        daily_time=schedule_time,
     )
 
     await bot.daily_sender(app)
 
     call = app.job_queue.calls()[0]
-    assert call["time"] == t
+    assert call["time"] == schedule_time
+    assert call["name"] == "daily_digest"
 
 
-async def test_send_digest_sends_composed_text_to_configured_chat():
+async def test_send_digest_sends_error_report_and_main_message_and_updates_dates():
     fake_bot = _FakeBot()
     context = _FakeContext(bot=fake_bot)
 
-    db_sources = [
-        {
-            "source_name": f"кафедра-{_nonce()}",
-            "source_link": "https://t.me/x",
-            "source_type": "tg",
-            "contact": "контакт",
-            "last_message_date": "2026-02-01",
-        }
-    ]
-    db = _FakeDatabase(sources=db_sources)
-
-    messages = [{"title": f"новость-{_nonce()}"}]
-    parser = _FakeParser(result=messages)
-
-    composer_text = f"дайджест-{_nonce()}"
-    composer = _FakeComposer(text=composer_text)
-
-    chat_id = random.randint(10_000, 99_999)
-    bot = WriterBot(
-        token=_nonce(),
-        chat_id=chat_id,
-        database=db,
-        parser=parser,
-        composer=composer,
-        daily_time=dt.time(hour=17, minute=0),
+    db = _FakeDatabase(
+        sources=[
+            {
+                "source_name": "source",
+                "source_link": "https://t.me/source",
+                "source_type": "tg",
+                "contact": "contact",
+                "last_message_date": dt.date(2026, 2, 1),
+            }
+        ]
     )
+    messages = [{"source_name": "source", "date": "2026-02-10", "message": "hello"}]
+    parser = _FakeParser((messages, ["parser error"]))
+    composer = _FakeComposer("digest text")
+    bot = _build_bot(database=db, parser=parser, composer=composer)
 
     await bot._send_digest(context)
 
-    assert fake_bot.sent()[0]["chat_id"] == chat_id
+    sent = fake_bot.sent()
+    assert len(sent) == 2
+    assert sent[0]["chat_id"] == 1002
+    assert sent[1]["chat_id"] == 1001
+    assert db.updated_messages() == messages
+    assert parser.calls()[0]["max_date"] == dt.date.today() - dt.timedelta(days=1)
+    assert composer.last_messages() == messages
 
 
+async def test_send_digest_when_parser_fails_notifies_error_chat():
+    fake_bot = _FakeBot()
+    context = _FakeContext(bot=fake_bot)
+
+    db = _FakeDatabase(sources=[])
+    bot = _build_bot(database=db, parser=_RaisingParser(), composer=_FakeComposer("digest text"))
+
+    await bot._send_digest(context)
+
+    sent = fake_bot.sent()
+    assert len(sent) == 1
+    assert sent[0]["chat_id"] == 1002
 
 
-async def test_shutdown_disconnects_parser_when_disconnect_exists():
-    parser = _FakeParser(result=[])
-    bot = WriterBot(
-        token=_nonce(),
-        chat_id=1,
-        database=None,
-        parser=parser,
-        composer=_FakeComposer("x"),
-        daily_time=dt.time(hour=17, minute=0),
-    )
+async def test_shutdown_disconnects_parser():
+    parser = _FakeParser(([], []))
+    bot = _build_bot(database=None, parser=parser, composer=_FakeComposer("digest text"))
 
     await bot.shutdown(application=None)
 
-    assert parser.is_disconnected()
+    assert parser.is_disconnected() is True
