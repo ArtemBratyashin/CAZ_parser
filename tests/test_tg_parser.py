@@ -2,8 +2,8 @@ from datetime import date, datetime
 
 import pytest
 
-import src.parsers.tg_parser as tg_module
-from src.parsers.tg_parser import TelegramParser
+import app.parsers.tg_parser as tg_module
+from app.parsers.tg_parser import TelegramParser
 
 
 pytestmark = pytest.mark.anyio

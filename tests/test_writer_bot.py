@@ -2,7 +2,7 @@ import datetime as dt
 
 import pytest
 
-from src.writer_bot import WriterBot
+from app.src.writer_bot import WriterBot
 
 
 pytestmark = pytest.mark.anyio

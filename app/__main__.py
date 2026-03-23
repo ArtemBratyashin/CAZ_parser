@@ -3,12 +3,12 @@ import logging
 from zoneinfo import ZoneInfo
 
 from database import Database
-from parser_manager import ParserManager
+from app.src.parser_manager import ParserManager
 from parsers.tg_parser import TelegramParser
 from parsers.vk_parser import VkParser
-from src.settings import Settings
-from text_composer import TextComposer
-from writer_bot import WriterBot
+from app.config import Settings
+from app.src.text_composer import TextComposer
+from app.src.writer_bot import WriterBot
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

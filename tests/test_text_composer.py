@@ -1,6 +1,6 @@
 import re
 
-from src.text_composer import TextComposer
+from app.src.text_composer import TextComposer
 
 
 def test_compose_with_empty_messages_returns_header_and_stats():

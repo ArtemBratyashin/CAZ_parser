@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from src.parser_manager import ParserManager
+from app.src.parser_manager import ParserManager
 
 
 pytestmark = pytest.mark.anyio

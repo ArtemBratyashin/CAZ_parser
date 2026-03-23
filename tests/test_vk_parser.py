@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 import pytest
 
-from src.parsers.vk_parser import VkParser
+from app.parsers.vk_parser import VkParser
 
 
 pytestmark = pytest.mark.anyio
