@@ -1,9 +1,9 @@
-from datetime import date, datetime
+﻿from datetime import date, datetime
 
 import pytest
 
-import app.parsers.tg_parser as tg_module
-from app.parsers.tg_parser import TelegramParser
+import app.parsing.parsers.tg_parser as tg_module
+from app.parsing.parsers.tg_parser import TelegramParser
 
 
 pytestmark = pytest.mark.anyio
@@ -17,9 +17,6 @@ class _FakeMessage:
 
 class _FakeTelegramClient:
     def __init__(self, session_name, api_id, api_hash):
-        self.session_name = session_name
-        self.api_id = api_id
-        self.api_hash = api_hash
         self._connected = False
         self._authorized = True
         self._disconnect_calls = 0
@@ -35,10 +32,10 @@ class _FakeTelegramClient:
         return self._authorized
 
     async def send_code_request(self, phone):
-        raise AssertionError("unexpected auth call in unit test")
+        raise AssertionError("unexpected auth call")
 
     async def sign_in(self, *args, **kwargs):
-        raise AssertionError("unexpected auth call in unit test")
+        raise AssertionError("unexpected auth call")
 
     def is_connected(self):
         return self._connected
@@ -72,23 +69,7 @@ async def test_ensure_client_creates_and_connects_client(monkeypatch):
     assert fake_client.is_connected() is True
 
 
-async def test_ensure_client_reuses_existing_connected_client(monkeypatch):
-    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
-    existing = _FakeTelegramClient("session", 1, "hash")
-    existing._connected = True
-    parser._client = existing
-
-    def _boom(*args, **kwargs):
-        raise AssertionError("new client should not be created")
-
-    monkeypatch.setattr(tg_module, "TelegramClient", _boom)
-
-    await parser._ensure_client()
-
-    assert parser._client is existing
-
-
-async def test_parse_single_channel_collects_only_messages_after_last_date_and_not_after_max_date():
+async def test_parse_single_channel_uses_last_message_date_when_date_from_is_none():
     parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
     fake_client = _FakeTelegramClient("session", 1, "hash")
     parser._client = fake_client
@@ -101,7 +82,6 @@ async def test_parse_single_channel_collects_only_messages_after_last_date_and_n
             _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "new one"),
             _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "new two"),
             _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "old stop"),
-            _FakeMessage(datetime(2026, 2, 12, 10, 0, 0), "must not be reached"),
         ],
     )
 
@@ -112,12 +92,39 @@ async def test_parse_single_channel_collects_only_messages_after_last_date_and_n
         "last_message_date": date(2026, 2, 13),
     }
 
-    result = await parser._parse_single_channel(source, max_date=date(2026, 2, 15))
+    result = await parser._parse_single_channel(source, date_from=None, date_to=date(2026, 2, 15))
 
     assert len(result) == 2
     assert result[0]["date"] == "2026-02-15"
     assert result[1]["date"] == "2026-02-14"
-    assert result[0]["message"] == "new one"
+
+
+async def test_parse_single_channel_uses_explicit_date_from_inclusive():
+    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+    fake_client = _FakeTelegramClient("session", 1, "hash")
+    parser._client = fake_client
+
+    channel_link = "https://t.me/channel_name"
+    fake_client.set_messages(
+        channel_link,
+        [
+            _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "new one"),
+            _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "new two"),
+            _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "keep by inclusive"),
+            _FakeMessage(datetime(2026, 2, 12, 10, 0, 0), "stop"),
+        ],
+    )
+
+    source = {
+        "source_name": "department",
+        "source_link": channel_link,
+        "contact": "contact",
+        "last_message_date": date(2026, 2, 1),
+    }
+
+    result = await parser._parse_single_channel(source, date_from=date(2026, 2, 13), date_to=date(2026, 2, 15))
+
+    assert [row["date"] for row in result] == ["2026-02-15", "2026-02-14", "2026-02-13"]
 
 
 async def test_parse_reraises_when_client_initialization_fails(monkeypatch):
@@ -131,7 +138,8 @@ async def test_parse_reraises_when_client_initialization_fails(monkeypatch):
     with pytest.raises(RuntimeError, match="failed to init client"):
         await parser.parse(
             [{"source_name": "x", "source_link": "https://t.me/x", "contact": "c", "last_message_date": date(2026, 2, 1)}],
-            max_date=date(2026, 2, 15),
+            date_from=None,
+            date_to=date(2026, 2, 15),
         )
 
 

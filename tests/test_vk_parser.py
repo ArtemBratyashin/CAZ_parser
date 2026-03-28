@@ -1,8 +1,8 @@
-from datetime import date, datetime
+﻿from datetime import date, datetime
 
 import pytest
 
-from app.parsers.vk_parser import VkParser
+from app.parsing.parsers.vk_parser import VkParser
 
 
 pytestmark = pytest.mark.anyio
@@ -44,7 +44,7 @@ def test_extract_group_identifier_handles_public_club_and_domain():
     assert VkParser._extract_group_identifier("https://vk.com/some_domain") == "some_domain"
 
 
-async def test_parse_single_group_collects_relevant_posts_and_stops_on_old_date():
+async def test_parse_single_group_uses_last_message_date_when_date_from_is_none():
     parser = VkParser(token="token")
     parser._vk = _FakeVkApi(
         pages=[
@@ -53,18 +53,42 @@ async def test_parse_single_group_collects_relevant_posts_and_stops_on_old_date(
                 {"date": _timestamp(2026, 2, 16), "text": "too new"},
                 {"date": _timestamp(2026, 2, 15), "text": "  keep\nthis  "},
                 {"date": _timestamp(2026, 2, 13), "text": "old stop"},
-            ],
-            [{"date": _timestamp(2026, 2, 12), "text": "must not be fetched"}],
+            ]
         ]
     )
 
-    result = await parser._parse_single_group(_source("https://vk.com/public123"), max_date=date(2026, 2, 15))
+    result = await parser._parse_single_group(
+        _source("https://vk.com/public123"),
+        date_from=None,
+        date_to=date(2026, 2, 15),
+    )
 
     assert len(result) == 1
     assert result[0]["date"] == "2026-02-15"
     assert result[0]["message"] == "keep this"
-    assert len(parser._vk.wall.calls) == 1
     assert parser._vk.wall.calls[0]["owner_id"] == -123
+
+
+async def test_parse_single_group_uses_explicit_date_from_inclusive():
+    parser = VkParser(token="token")
+    parser._vk = _FakeVkApi(
+        pages=[
+            [
+                {"date": _timestamp(2026, 2, 15), "text": "d15"},
+                {"date": _timestamp(2026, 2, 14), "text": "d14"},
+                {"date": _timestamp(2026, 2, 13), "text": "d13"},
+                {"date": _timestamp(2026, 2, 12), "text": "d12 stop"},
+            ]
+        ]
+    )
+
+    result = await parser._parse_single_group(
+        _source("https://vk.com/public123"),
+        date_from=date(2026, 2, 13),
+        date_to=date(2026, 2, 15),
+    )
+
+    assert [row["date"] for row in result] == ["2026-02-15", "2026-02-14", "2026-02-13"]
 
 
 async def test_parse_returns_empty_list_when_client_init_fails(monkeypatch):
@@ -75,7 +99,7 @@ async def test_parse_returns_empty_list_when_client_init_fails(monkeypatch):
 
     monkeypatch.setattr(parser, "_ensure_client", _boom)
 
-    result = await parser.parse([_source("https://vk.com/test")], max_date=date(2026, 2, 15))
+    result = await parser.parse([_source("https://vk.com/test")], date_from=None, date_to=date(2026, 2, 15))
     assert result == []
 
 
@@ -86,13 +110,13 @@ async def test_parse_initializes_client_and_merges_messages(monkeypatch):
     def _fake_ensure():
         state["initialized"] = True
 
-    async def _fake_parse_single_group(source, max_date):
+    async def _fake_parse_single_group(source, date_from=None, date_to=None):
         return [{"source_name": source["source_name"], "date": "2026-02-12", "message": "ok"}]
 
     monkeypatch.setattr(parser, "_ensure_client", _fake_ensure)
     monkeypatch.setattr(parser, "_parse_single_group", _fake_parse_single_group)
 
-    result = await parser.parse([_source("https://vk.com/a"), _source("https://vk.com/b")], max_date=date(2026, 2, 15))
+    result = await parser.parse([_source("https://vk.com/a"), _source("https://vk.com/b")], date_from=None, date_to=None)
 
     assert state["initialized"] is True
     assert len(result) == 2

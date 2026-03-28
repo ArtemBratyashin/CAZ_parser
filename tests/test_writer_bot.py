@@ -1,8 +1,10 @@
-import datetime as dt
+﻿import datetime as dt
 
 import pytest
 
-from app.src.writer_bot import WriterBot
+from app.bot import DigestBotApp
+from app.handlers.basic import myid_handler, start_handler
+from app.parsing.orchestrator import DigestOrchestrator
 
 
 pytestmark = pytest.mark.anyio
@@ -69,160 +71,153 @@ class _FakeApplication:
         self.job_queue = _FakeJobQueue()
 
 
-class _FakeParser:
-    def __init__(self, result):
-        self._result = result
-        self._calls = []
-        self._disconnected = False
+class _FakeOrchestrator:
+    def __init__(self, result=None, raise_on_collect=False):
+        self._result = result or {"text": "digest", "errors": [], "messages": []}
+        self._raise_on_collect = raise_on_collect
+        self.collect_calls = []
+        self.disconnected = False
 
-    async def parse(self, sources, max_date):
-        self._calls.append({"sources": list(sources), "max_date": max_date})
+    async def collect_digest(self, date_from=None, date_to=None, update_db_dates=False):
+        self.collect_calls.append(
+            {"date_from": date_from, "date_to": date_to, "update_db_dates": update_db_dates}
+        )
+        if self._raise_on_collect:
+            raise RuntimeError("collect failed")
         return self._result
 
     async def disconnect(self):
-        self._disconnected = True
-
-    def calls(self):
-        return list(self._calls)
-
-    def is_disconnected(self):
-        return self._disconnected
+        self.disconnected = True
 
 
-class _RaisingParser:
-    async def parse(self, sources, max_date):
-        raise RuntimeError("parse failed")
+class _FakeDatabase:
+    def __init__(self, sources):
+        self._sources = list(sources)
+        self.updated_messages = None
+
+    def sources(self):
+        return list(self._sources)
+
+    def update_dates(self, messages):
+        self.updated_messages = list(messages)
+
+
+class _FakeParser:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    async def parse(self, sources, date_from=None, date_to=None):
+        self.calls.append({"sources": list(sources), "date_from": date_from, "date_to": date_to})
+        return self.response
 
     async def disconnect(self):
         return None
 
 
 class _FakeComposer:
-    def __init__(self, text):
-        self._text = text
-        self._last_messages = None
+    def __init__(self, text="digest"):
+        self.text = text
+        self.calls = []
 
-    def compose(self, messages_list):
-        self._last_messages = messages_list
-        return self._text
-
-    def last_messages(self):
-        return self._last_messages
+    def compose(self, messages):
+        self.calls.append(list(messages))
+        return self.text
 
 
-class _FakeDatabase:
-    def __init__(self, sources):
-        self._sources = list(sources)
-        self._updated = None
-
-    def sources(self):
-        return list(self._sources)
-
-    def update_dates(self, messages):
-        self._updated = list(messages)
-
-    def updated_messages(self):
-        return self._updated
-
-
-def _build_bot(database, parser, composer, daily_time=dt.time(hour=17, minute=0)):
-    return WriterBot(
+def _build_bot(orchestrator, daily_time=dt.time(hour=17, minute=0)):
+    return DigestBotApp(
         token="token",
         chat_id=1001,
         chat_id_errors=1002,
-        database=database,
-        parser=parser,
-        composer=composer,
+        orchestrator=orchestrator,
         daily_time=daily_time,
     )
 
 
-async def test_start_replies_when_message_exists():
+async def test_start_handler_replies_greeting():
     message = _FakeMessage()
     update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
-    bot = _build_bot(database=None, parser=_FakeParser(([], [])), composer=_FakeComposer("digest"))
 
-    await bot.start(update, context=None)
+    await start_handler(update, context=None)
 
-    assert len(message.replies()) == 1
+    assert message.replies() == ["Привет!"]
 
 
-async def test_my_id_replies_with_chat_information():
+async def test_myid_handler_replies_chat_info():
     message = _FakeMessage()
     update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=555, chat_type="group"))
-    bot = _build_bot(database=None, parser=_FakeParser(([], [])), composer=_FakeComposer("digest"))
 
-    await bot.my_id(update, context=None)
+    await myid_handler(update, context=None)
 
     assert "555" in message.replies()[0]
 
 
-async def test_daily_sender_registers_daily_digest_job():
-    schedule_time = dt.time(hour=8, minute=30)
+async def test_on_startup_registers_daily_job():
     app = _FakeApplication()
-    bot = _build_bot(
-        database=None,
-        parser=_FakeParser(([], [])),
-        composer=_FakeComposer("digest"),
-        daily_time=schedule_time,
-    )
+    bot = _build_bot(orchestrator=_FakeOrchestrator(), daily_time=dt.time(hour=8, minute=30))
 
-    await bot.daily_sender(app)
+    await bot._on_startup(app)
 
     call = app.job_queue.calls()[0]
-    assert call["time"] == schedule_time
+    assert call["time"] == dt.time(hour=8, minute=30)
     assert call["name"] == "daily_digest"
 
 
-async def test_send_digest_sends_error_report_and_main_message_and_updates_dates():
+async def test_send_scheduled_digest_sends_main_and_error_messages():
     fake_bot = _FakeBot()
     context = _FakeContext(bot=fake_bot)
-
-    db = _FakeDatabase(
-        sources=[
-            {
-                "source_name": "source",
-                "source_link": "https://t.me/source",
-                "source_type": "tg",
-                "contact": "contact",
-                "last_message_date": dt.date(2026, 2, 1),
-            }
-        ]
+    orchestrator = _FakeOrchestrator(
+        result={"text": "digest text", "errors": ["p1"], "messages": []}
     )
-    messages = [{"source_name": "source", "date": "2026-02-10", "message": "hello"}]
-    parser = _FakeParser((messages, ["parser error"]))
-    composer = _FakeComposer("digest text")
-    bot = _build_bot(database=db, parser=parser, composer=composer)
+    bot = _build_bot(orchestrator=orchestrator)
 
-    await bot._send_digest(context)
+    await bot._send_scheduled_digest(context)
 
     sent = fake_bot.sent()
     assert len(sent) == 2
     assert sent[0]["chat_id"] == 1002
     assert sent[1]["chat_id"] == 1001
-    assert db.updated_messages() == messages
-    assert parser.calls()[0]["max_date"] == dt.date.today() - dt.timedelta(days=1)
-    assert composer.last_messages() == messages
+    assert orchestrator.collect_calls[0]["update_db_dates"] is True
 
 
-async def test_send_digest_when_parser_fails_notifies_error_chat():
+async def test_send_scheduled_digest_handles_exception_and_notifies_error_chat():
     fake_bot = _FakeBot()
     context = _FakeContext(bot=fake_bot)
+    bot = _build_bot(orchestrator=_FakeOrchestrator(raise_on_collect=True))
 
-    db = _FakeDatabase(sources=[])
-    bot = _build_bot(database=db, parser=_RaisingParser(), composer=_FakeComposer("digest text"))
-
-    await bot._send_digest(context)
+    await bot._send_scheduled_digest(context)
 
     sent = fake_bot.sent()
     assert len(sent) == 1
     assert sent[0]["chat_id"] == 1002
 
 
-async def test_shutdown_disconnects_parser():
-    parser = _FakeParser(([], []))
-    bot = _build_bot(database=None, parser=parser, composer=_FakeComposer("digest text"))
+async def test_on_shutdown_disconnects_orchestrator():
+    orchestrator = _FakeOrchestrator()
+    bot = _build_bot(orchestrator=orchestrator)
 
-    await bot.shutdown(application=None)
+    await bot._on_shutdown(application=None)
 
-    assert parser.is_disconnected() is True
+    assert orchestrator.disconnected is True
+
+
+async def test_orchestrator_collect_digest_uses_parser_and_optional_update_flag():
+    messages = [{"source_name": "src", "date": "2026-02-10", "message": "m"}]
+    parser = _FakeParser((messages, []))
+    composer = _FakeComposer(text="digest text")
+    database = _FakeDatabase(sources=[{"source_name": "dep", "source_type": "tg"}])
+
+    orchestrator = DigestOrchestrator(database=database, parser_manager=parser, composer=composer)
+
+    result = await orchestrator.collect_digest(
+        date_from=dt.date(2026, 2, 1),
+        date_to=dt.date(2026, 2, 10),
+        update_db_dates=True,
+    )
+
+    assert result["text"] == "digest text"
+    assert result["messages"] == messages
+    assert parser.calls[0]["date_from"] == dt.date(2026, 2, 1)
+    assert parser.calls[0]["date_to"] == dt.date(2026, 2, 10)
+    assert database.updated_messages == messages
