@@ -23,6 +23,11 @@ class _FailingParser:
         raise RuntimeError("boom")
 
 
+class _UnexpectedParser:
+    async def parse(self, sources, date_from=None, date_to=None):
+        return {"status": "ok"}
+
+
 class _DisconnectingParser:
     def __init__(self):
         self.disconnected = False
@@ -89,6 +94,38 @@ async def test_parse_collects_errors_from_failing_parsers():
     assert len(messages) == 1
     assert len(errors) == 1
     assert "boom" in errors[0]
+
+
+async def test_parse_collects_error_when_parser_returns_unexpected_type():
+    sources = [_source("tg", "tg_one")]
+    manager = ParserManager(tg_parser=_UnexpectedParser())
+
+    messages, errors = await manager.parse(sources, date_from=None, date_to=None)
+
+    assert messages == []
+    assert len(errors) == 1
+    assert "Unexpected parser result type" in errors[0]
+
+
+async def test_parse_ignores_unknown_source_types():
+    tg = _RecordingParser([{"source_name": "tg", "date": "2026-02-12", "message": "ok"}])
+    sources = [
+        _source("unknown", "u_one"),
+        _source("tg", "tg_one"),
+    ]
+
+    messages, errors = await ParserManager(tg_parser=tg).parse(sources, date_from=None, date_to=None)
+
+    assert errors == []
+    assert len(messages) == 1
+    assert tg.calls[0]["sources"] == [
+        {
+            "source_name": "tg_one",
+            "source_link": "https://example.com/tg_one",
+            "contact": "contact",
+            "last_message_date": date(2026, 2, 1),
+        }
+    ]
 
 
 async def test_disconnect_calls_disconnect_on_internal_parsers():

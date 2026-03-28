@@ -1,3 +1,5 @@
+import datetime as dt
+
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -28,7 +30,49 @@ async def info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
 
+async def digest_today_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    orchestrator = context.application.bot_data.get("orchestrator")
+    if orchestrator is None:
+        if update.message:
+            await update.message.reply_text("Возникла ошибка")
+        return
+
+    today = dt.date.today()
+    result = await orchestrator.collect_digest(
+        date_from=today,
+        date_to=today,
+        update_db_dates=False,
+    )
+
+    if update.message:
+        if result["errors"]:
+            await update.message.reply_text("Ошибки при парсинге:\n" + "\n".join(result["errors"]))
+        await update.message.reply_text(result["text"])
+
+
+async def digest_yesterday_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    orchestrator = context.application.bot_data.get("orchestrator")
+    if orchestrator is None:
+        if update.message:
+            await update.message.reply_text("Возникла ошибка")
+        return
+
+    yesterday = dt.date.today() - dt.timedelta(days=1)
+    result = await orchestrator.collect_digest(
+        date_from=yesterday,
+        date_to=yesterday,
+        update_db_dates=False,
+    )
+
+    if update.message:
+        if result["errors"]:
+            await update.message.reply_text("Ошибки при парсинге:\n" + "\n".join(result["errors"]))
+        await update.message.reply_text(result["text"])
+
+
 def register_basic_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("myid", myid_handler))
     application.add_handler(CommandHandler("info", info_handler))
+    application.add_handler(CommandHandler("digest_today", digest_today_handler))
+    application.add_handler(CommandHandler("digest_yesterday", digest_yesterday_handler))

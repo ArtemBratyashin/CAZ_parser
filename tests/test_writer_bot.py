@@ -3,7 +3,7 @@
 import pytest
 
 from app.bot import DigestBotApp
-from app.handlers.basic import info_handler, myid_handler, start_handler
+from app.handlers.basic import digest_today_handler, digest_yesterday_handler, info_handler, myid_handler, start_handler
 from app.parsing.orchestrator import DigestOrchestrator
 
 
@@ -45,8 +45,15 @@ class _FakeBot:
 
 
 class _FakeContext:
-    def __init__(self, bot):
+    class _App:
+        def __init__(self, orchestrator=None):
+            self.bot_data = {}
+            if orchestrator is not None:
+                self.bot_data["orchestrator"] = orchestrator
+
+    def __init__(self, bot, orchestrator=None):
         self.bot = bot
+        self.application = self._App(orchestrator=orchestrator)
 
 
 class _FakeJob:
@@ -94,11 +101,13 @@ class _FakeDatabase:
     def __init__(self, sources):
         self._sources = list(sources)
         self.updated_messages = None
+        self.update_calls = 0
 
     def sources(self):
         return list(self._sources)
 
     def update_dates(self, messages):
+        self.update_calls += 1
         self.updated_messages = list(messages)
 
 
@@ -141,7 +150,7 @@ async def test_start_handler_replies_greeting():
 
     await start_handler(update, context=None)
 
-    assert message.replies() == ["Привет!"]
+    assert "Привет!" in message.replies()[0]
 
 
 async def test_myid_handler_replies_chat_info():
@@ -170,6 +179,74 @@ async def test_info_handler_replies_commands_list():
     assert "(/actual_digest)" in reply
 
 
+async def test_digest_today_handler_calls_orchestrator_without_db_update():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+    orchestrator = _FakeOrchestrator(result={"text": "today digest", "errors": [], "messages": []})
+    context = _FakeContext(bot=_FakeBot(), orchestrator=orchestrator)
+
+    await digest_today_handler(update, context)
+
+    assert message.replies()[-1] == "today digest"
+    call = orchestrator.collect_calls[0]
+    assert call["date_from"] == dt.date.today()
+    assert call["date_to"] == dt.date.today()
+    assert call["update_db_dates"] is False
+
+
+async def test_digest_yesterday_handler_calls_orchestrator_without_db_update():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+    orchestrator = _FakeOrchestrator(result={"text": "yesterday digest", "errors": [], "messages": []})
+    context = _FakeContext(bot=_FakeBot(), orchestrator=orchestrator)
+
+    await digest_yesterday_handler(update, context)
+
+    assert message.replies()[-1] == "yesterday digest"
+    yesterday = dt.date.today() - dt.timedelta(days=1)
+    call = orchestrator.collect_calls[0]
+    assert call["date_from"] == yesterday
+    assert call["date_to"] == yesterday
+    assert call["update_db_dates"] is False
+
+
+async def test_digest_today_handler_returns_message_when_orchestrator_missing():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+    context = _FakeContext(bot=_FakeBot(), orchestrator=None)
+
+    await digest_today_handler(update, context)
+
+    assert "ошибка" in message.replies()[0].lower()
+
+
+async def test_digest_yesterday_handler_returns_message_when_orchestrator_missing():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+    context = _FakeContext(bot=_FakeBot(), orchestrator=None)
+
+    await digest_yesterday_handler(update, context)
+
+    assert "ошибка" in message.replies()[0].lower()
+
+
+async def test_digest_today_handler_replies_with_errors_before_digest_text():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+    orchestrator = _FakeOrchestrator(
+        result={"text": "digest text", "errors": ["err one", "err two"], "messages": []}
+    )
+    context = _FakeContext(bot=_FakeBot(), orchestrator=orchestrator)
+
+    await digest_today_handler(update, context)
+
+    replies = message.replies()
+    assert len(replies) == 2
+    assert "Ошибки при парсинге" in replies[0]
+    assert "err one" in replies[0]
+    assert replies[1] == "digest text"
+
+
 async def test_on_startup_registers_daily_job():
     app = _FakeApplication()
     bot = _build_bot(orchestrator=_FakeOrchestrator(), daily_time=dt.time(hour=8, minute=30))
@@ -179,9 +256,10 @@ async def test_on_startup_registers_daily_job():
     call = app.job_queue.calls()[0]
     assert call["time"] == dt.time(hour=8, minute=30)
     assert call["name"] == "daily_digest"
+    assert call["callback"] == bot._send_digest
 
 
-async def test_send_scheduled_digest_sends_main_and_error_messages():
+async def test_send_digest_sends_main_and_error_messages():
     fake_bot = _FakeBot()
     context = _FakeContext(bot=fake_bot)
     orchestrator = _FakeOrchestrator(
@@ -189,7 +267,7 @@ async def test_send_scheduled_digest_sends_main_and_error_messages():
     )
     bot = _build_bot(orchestrator=orchestrator)
 
-    await bot._send_scheduled_digest(context)
+    await bot._send_digest(context)
 
     sent = fake_bot.sent()
     assert len(sent) == 2
@@ -198,12 +276,12 @@ async def test_send_scheduled_digest_sends_main_and_error_messages():
     assert orchestrator.collect_calls[0]["update_db_dates"] is True
 
 
-async def test_send_scheduled_digest_handles_exception_and_notifies_error_chat():
+async def test_send_digest_handles_exception_and_notifies_error_chat():
     fake_bot = _FakeBot()
     context = _FakeContext(bot=fake_bot)
     bot = _build_bot(orchestrator=_FakeOrchestrator(raise_on_collect=True))
 
-    await bot._send_scheduled_digest(context)
+    await bot._send_digest(context)
 
     sent = fake_bot.sent()
     assert len(sent) == 1
@@ -238,3 +316,31 @@ async def test_orchestrator_collect_digest_uses_parser_and_optional_update_flag(
     assert parser.calls[0]["date_from"] == dt.date(2026, 2, 1)
     assert parser.calls[0]["date_to"] == dt.date(2026, 2, 10)
     assert database.updated_messages == messages
+    assert database.update_calls == 1
+
+
+async def test_orchestrator_collect_digest_defaults_date_to_yesterday_and_skips_db_update(monkeypatch):
+    class _FixedDate(dt.date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 2, 20)
+
+    monkeypatch.setattr("app.parsing.orchestrator.dt.date", _FixedDate)
+
+    messages = [{"source_name": "src", "date": "2026-02-19", "message": "m"}]
+    parser = _FakeParser((messages, []))
+    composer = _FakeComposer(text="digest text")
+    database = _FakeDatabase(sources=[{"source_name": "dep", "source_type": "tg"}])
+    orchestrator = DigestOrchestrator(database=database, parser_manager=parser, composer=composer)
+
+    result = await orchestrator.collect_digest(
+        date_from=None,
+        date_to=None,
+        update_db_dates=False,
+    )
+
+    assert result["date_to"] == dt.date(2026, 2, 19)
+    assert parser.calls[0]["date_to"] == dt.date(2026, 2, 19)
+    assert parser.calls[0]["date_from"] is None
+    assert database.updated_messages is None
+    assert database.update_calls == 0
