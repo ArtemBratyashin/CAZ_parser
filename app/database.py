@@ -2,10 +2,9 @@ import datetime as dt
 import logging
 from typing import Dict, List
 
+from models.department import Department
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
-
-from app.models.department import Department
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +15,12 @@ class Database:
     '''
 
     def __init__(self, dsn: str) -> None:
-        """Принимает DSN (строку подключения) при инициализации."""
+        '''Принимает DSN (строку подключения) при инициализации.'''
         self.engine = create_engine(dsn)
         self.Session = sessionmaker(bind=self.engine)
 
     def sources(self) -> List[Dict]:
-        """Возвращает список источников из БД."""
+        '''Возвращает список источников из БД.'''
         with self.Session() as session:
             stmt = select(Department)
             departments = session.scalars(stmt).all()
@@ -48,7 +47,7 @@ class Database:
             return result
 
     def update_dates(self, messages: List[Dict]) -> None:
-        """Обновляет даты новостей и время последнего прохода бота."""
+        '''Обновляет даты новостей и время последнего прохода бота.'''
         with self.Session() as session:
             for m in messages:
                 name = m.get("source_name")

@@ -7,12 +7,13 @@ logger = logging.getLogger(__name__)
 
 
 class ParserManager:
-    """
-    ParserManager - orchestrator for all source parsers.
-    Splits sources by type, runs enabled parsers, and merges results.
-    """
+    '''
+    ParserManager - оркестратор для всех парсеров.
+    Разделяет источники по типам и запускает соответствующие парсеры.
+    '''
 
     def __init__(self, tg_parser=None, vk_parser=None, web_parser=None) -> None:
+        '''Инициализируем менеджер парсеров с опциональными парсерами для Telegram, VK и веб-сайтов.'''
         self._tg = tg_parser
         self._vk = vk_parser
         self._web = web_parser
@@ -23,6 +24,7 @@ class ParserManager:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> Tuple[List[Dict], List[str]]:
+        '''Основной метод для запуска парсеров. Принимает список источников и возвращает список сообщений и ошибок.'''
         tg_sources, vk_sources, web_sources = self._split_sources(sources)
         tasks = self._build_tasks(tg_sources, vk_sources, web_sources, date_from, date_to)
 
@@ -44,6 +46,7 @@ class ParserManager:
         return messages, errors
 
     def _split_sources(self, sources: List[Dict]) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+        '''Разделяет источники на три категории'''
         tg_sources: List[Dict] = []
         vk_sources: List[Dict] = []
         web_sources: List[Dict] = []
@@ -64,6 +67,7 @@ class ParserManager:
         return tg_sources, vk_sources, web_sources
 
     def _source_info(self, source: Dict) -> Dict:
+        '''Извлекает и возвращает только нужные поля из источника для парсера'''
         return {
             "source_name": source.get("source_name"),
             "source_link": source.get("source_link"),
@@ -79,6 +83,7 @@ class ParserManager:
         date_from: Optional[date],
         date_to: Optional[date],
     ) -> List:
+        '''Строит список задач для запуска парсеров'''
         tasks = []
 
         if tg_sources:
@@ -102,6 +107,7 @@ class ParserManager:
         return tasks
 
     async def disconnect(self) -> None:
+        '''Отключает все парсеры, если у них есть метод disconnect'''
         if self._tg is not None and hasattr(self._tg, "disconnect"):
             await self._tg.disconnect()
         if self._vk is not None and hasattr(self._vk, "disconnect"):

@@ -2,14 +2,14 @@ import datetime
 import logging
 from zoneinfo import ZoneInfo
 
-from app.bot import DigestBotApp
-from app.config import Settings
-from app.database import Database
-from app.parsing.orchestrator import DigestOrchestrator
-from app.parsing.parser_manager import ParserManager
-from app.parsing.parsers.tg_parser import TelegramParser
-from app.parsing.parsers.vk_parser import VkParser
-from app.parsing.text_composer import TextComposer
+from bot import DigestBotApp
+from config import Settings
+from database import Database
+from parsing.orchestrator import DigestOrchestrator
+from parsing.parser_manager import ParserManager
+from parsing.parsers.tg_parser import TelegramParser
+from parsing.parsers.vk_parser import VkParser
+from parsing.text_composer import TextComposer
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

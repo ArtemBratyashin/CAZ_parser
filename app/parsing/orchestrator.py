@@ -12,6 +12,7 @@ class DigestOrchestrator:
     """
 
     def __init__(self, database, parser_manager, composer) -> None:
+        '''Инициируем оркестратор с помощью базы данных, менеджера парсеров и композитора текста'''
         self._database = database
         self._parser = parser_manager
         self._composer = composer
@@ -22,10 +23,11 @@ class DigestOrchestrator:
         date_to: Optional[dt.date] = None,
         update_db_dates: bool = False,
     ) -> Dict:
-        """
-        If date_from is None, parser layer uses last_message_date from DB
-        as lower bound for each source.
-        """
+        '''
+        Собираем дайджест за указанный период.
+        Если даты не указаны, то собираем дайджест за вчерашний день.
+        Если update_db_dates=True, то обновляем даты в базе данных
+        '''
         effective_date_to = date_to or (dt.date.today() - dt.timedelta(days=1))
 
         sources = self._database.sources()
@@ -50,4 +52,5 @@ class DigestOrchestrator:
         }
 
     async def disconnect(self) -> None:
+        '''Отключаемся от всех ресурсов, которые использовались в процессе сбора дайджеста'''
         await self._parser.disconnect()

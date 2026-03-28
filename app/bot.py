@@ -1,17 +1,22 @@
 import datetime as dt
 import logging
 
+from handlers.basic import register_basic_handlers
 from telegram.ext import Application, ContextTypes
-
-from app.handlers import register_basic_handlers
 
 logger = logging.getLogger(__name__)
 
 
 class DigestBotApp:
-    """
-    Telegram bot runtime: handlers + scheduled digest delivery.
-    """
+    '''
+    Класс для управления ботом, который отправляет ежедневный дайджест.
+    Он инициализируется оркестратором для сбора данных и временем для ежедневной отправки.
+
+    Example:
+        DigestBotApp(
+            ...
+        ).run()
+    '''
 
     def __init__(
         self,
@@ -28,6 +33,7 @@ class DigestBotApp:
         self._daily_time = daily_time or dt.time(hour=17, minute=0)
 
     def run(self) -> None:
+        '''Запуск бота и постановка на расписание ежедневной отправки дайджеста и активация handlers'''
         application = (
             Application.builder()
             .token(self._token)
@@ -39,6 +45,7 @@ class DigestBotApp:
         application.run_polling()
 
     async def _on_startup(self, application: Application) -> None:
+        '''Постановка на расписание ежедневной отправки дайджеста'''
         job = application.job_queue.run_daily(
             self._send_digest,
             time=self._daily_time,
@@ -48,6 +55,7 @@ class DigestBotApp:
         logger.info("Next run time: %s", getattr(job, "next_run_time", None))
 
     async def _send_digest(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        '''Сбор и отправка дайджеста, а также обработка ошибок'''
         try:
             result = await self._orchestrator.collect_digest(
                 date_from=None,
@@ -72,5 +80,6 @@ class DigestBotApp:
             )
 
     async def _on_shutdown(self, application: Application) -> None:
+        '''Деинициализация оркестратора при завершении работы бота'''
         await self._orchestrator.disconnect()
         logger.info("Orchestrator disconnected")

@@ -3,7 +3,7 @@
 import pytest
 
 from app.bot import DigestBotApp
-from app.handlers.basic import myid_handler, start_handler
+from app.handlers.basic import info_handler, myid_handler, start_handler
 from app.parsing.orchestrator import DigestOrchestrator
 
 
@@ -151,6 +151,23 @@ async def test_myid_handler_replies_chat_info():
     await myid_handler(update, context=None)
 
     assert "555" in message.replies()[0]
+
+
+async def test_info_handler_replies_commands_list():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=1, chat_type="private"))
+
+    await info_handler(update, context=None)
+
+    reply = message.replies()[0]
+    assert "(/start)" in reply
+    assert "(/myid)" in reply
+    assert "(/info)" in reply
+    assert "(/update_dates_to_yesterday)" in reply
+    assert "(/digest_today)" in reply
+    assert "(/digest_yesterday)" in reply
+    assert "(/digest_last_week)" in reply
+    assert "(/actual_digest)" in reply
 
 
 async def test_on_startup_registers_daily_job():
