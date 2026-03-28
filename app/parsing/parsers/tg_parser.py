@@ -1,5 +1,5 @@
-import logging
-from datetime import date
+﻿import logging
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from telethon import TelegramClient
@@ -8,46 +8,38 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramParser:
-    '''
-    Парсер для получения новостей из Telegram каналов через Telethon (UserBot).
-    '''
-
     def __init__(
         self,
         api_id: int,
         api_hash: str,
         phone_number: str,
         session_name: str = "user_session",
-        max_date: Optional[date] = None,
     ):
         self._session_name = session_name
         self._api_id = api_id
         self._api_hash = api_hash
         self._phone_number = phone_number
         self._client: Optional[TelegramClient] = None
-        self._max_date = max_date
 
-    async def parse(self, sources: List[Dict], max_date: date) -> List[Dict]:
-        '''Основной метод: подключается к TG и перебирает список источников.'''
-        try:
-            await self._ensure_client()
-            all_results = []
+    async def parse(
+        self,
+        sources: List[Dict],
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict]:
+        await self._ensure_client()
+        all_results: List[Dict] = []
 
-            logger.info("📊 Начинаю парсинг %d TG каналов", len(sources))
+        logger.info("Starting TG parsing for %d channels", len(sources))
 
-            for source in sources:
-                channel_news = await self._parse_single_channel(source, max_date=max_date)
-                all_results.extend(channel_news)
+        for source in sources:
+            channel_news = await self._parse_single_channel(source, date_from=date_from, date_to=date_to)
+            all_results.extend(channel_news)
 
-            logger.info("✅ TG парсинг завершён. Найдено новых сообщений: %d", len(all_results))
-            return all_results
-
-        except Exception as e:
-            logger.error("❌ Критическая ошибка в TelegramParser.parse: %s", e)
-            raise e
+        logger.info("TG parsing finished. New messages: %d", len(all_results))
+        return all_results
 
     async def _ensure_client(self) -> None:
-        '''Инициализация клиента и синхронная авторизация при необходимости.'''
         if self._client and self._client.is_connected():
             return
 
@@ -55,31 +47,46 @@ class TelegramParser:
         await self._client.connect()
 
         if not await self._client.is_user_authorized():
-            logger.info("🔐 Требуется авторизация в Telegram...")
+            logger.info("Telegram auth required")
             await self._client.send_code_request(self._phone_number)
 
-            code = input(f"🔐 Введите код из Telegram для номера {self._phone_number}: ").strip()
+            code = input(f"Enter Telegram code for {self._phone_number}: ").strip()
 
             try:
                 await self._client.sign_in(self._phone_number, code)
-            except Exception as e:
-                if "password" in str(e).lower():
-                    password = input("🔐 Введите пароль 2FA: ").strip()
+            except Exception as exc:
+                if "password" in str(exc).lower():
+                    password = input("Enter Telegram 2FA password: ").strip()
                     await self._client.sign_in(password=password)
                 else:
-                    raise e
-            logger.info("✅ Авторизация успешно завершена")
+                    raise
 
-    async def _parse_single_channel(self, source: Dict, max_date: date) -> List[Dict]:
-        '''Парсинг конкретного канала.'''
-        results = []
+    async def _parse_single_channel(
+        self,
+        source: Dict,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict]:
+        results: List[Dict] = []
+
         try:
             channel_link = source["source_link"]
             source_name = source["source_name"]
 
-            last_date = source.get("last_message_date")
+            last_date = self._to_date(source.get("last_message_date"))
+            start_date = self._to_date(date_from)
+            end_date = self._to_date(date_to)
 
-            logger.info("🔍 Проверяю канал: %s (после %s)", source_name, last_date)
+            # If explicit date_from is not provided, use DB date boundary as before.
+            lower_bound = start_date if start_date is not None else last_date
+            inclusive_start = start_date is not None
+
+            logger.info(
+                "TG channel=%s, lower_bound=%s, date_to=%s",
+                source_name,
+                lower_bound,
+                end_date,
+            )
 
             async for message in self._client.iter_messages(channel_link, limit=50):
                 if not message or not message.text:
@@ -87,11 +94,16 @@ class TelegramParser:
 
                 msg_date = message.date.date()
 
-                if msg_date <= last_date:
-                    break
-
-                if max_date and msg_date > max_date:
+                if end_date and msg_date > end_date:
                     continue
+
+                if lower_bound is not None:
+                    if inclusive_start:
+                        if msg_date < lower_bound:
+                            break
+                    else:
+                        if msg_date <= lower_bound:
+                            break
 
                 results.append(
                     {
@@ -99,17 +111,35 @@ class TelegramParser:
                         "source_link": channel_link,
                         "contact": source.get("contact"),
                         "date": msg_date.strftime("%Y-%m-%d"),
-                        "message": message.text.replace('\n', ' '),
+                        "message": message.text.replace("\n", " "),
                     }
                 )
 
-        except Exception as e:
-            logger.error("❌ Ошибка при парсинге канала %s: %s", source.get("source_name"), e)
+        except Exception as exc:
+            logger.error("TG parsing error for %s: %s", source.get("source_name"), exc)
 
         return results
 
+    @staticmethod
+    def _to_date(value) -> Optional[date]:
+        if value is None:
+            return None
+        if isinstance(value, date):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return None
+            for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d.%m.%Y"):
+                try:
+                    return datetime.strptime(text, fmt).date()
+                except ValueError:
+                    continue
+        return None
+
     async def disconnect(self) -> None:
-        '''Корректное закрытие сессии.'''
         if self._client:
             await self._client.disconnect()
-            logger.info("✅ Сессия Telethon закрыта")
+            logger.info("Telethon session closed")

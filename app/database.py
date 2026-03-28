@@ -1,11 +1,13 @@
 import datetime as dt
+import logging
 from typing import Dict, List
-from venv import logger
 
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
 
-from models.department import Department
+from app.models.department import Department
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
