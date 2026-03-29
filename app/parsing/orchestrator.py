@@ -54,6 +54,12 @@ class DigestOrchestrator:
         """Обновляет даты новостей в БД на вчерашнюю дату."""
         return self._database.update_dates_to_yesterday()
 
+    def run_seed_db(self) -> None:
+        """Запускает загрузку/синхронизацию источников из Excel в БД."""
+        from data.seed_db import seed_database
+
+        seed_database()
+
     async def disconnect(self) -> None:
         """Отключаемся от ресурсов, используемых в процессе сбора дайджеста."""
         await self._parser.disconnect()

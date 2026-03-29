@@ -9,6 +9,7 @@ from app.handlers.basic import (
     info_handler,
     myid_handler,
     register_basic_handlers,
+    seed_db_handler,
     start_handler,
     update_dates_to_yesterday_handler,
 )
@@ -45,6 +46,8 @@ class _FakeOrchestrator:
         self.collect_calls = []
         self.update_dates_calls = 0
         self.update_dates_result = 0
+        self.seed_calls = 0
+        self.seed_should_fail = False
         self._result = result or {"text": "digest", "errors": [], "messages": []}
 
     async def collect_digest(self, date_from=None, date_to=None, update_db_dates=False):
@@ -56,6 +59,11 @@ class _FakeOrchestrator:
     def update_dates_to_yesterday(self):
         self.update_dates_calls += 1
         return self.update_dates_result
+
+    def run_seed_db(self):
+        self.seed_calls += 1
+        if self.seed_should_fail:
+            raise RuntimeError("seed failed")
 
 
 class _FakeContext:
@@ -122,6 +130,7 @@ async def test_info_handler_contains_all_commands():
     assert "(/start)" in reply
     assert "(/myid)" in reply
     assert "(/info)" in reply
+    assert "(/seed_db)" in reply
     assert "(/update_dates_to_yesterday)" in reply
     assert "(/digest_today)" in reply
     assert "(/digest_yesterday)" in reply
@@ -190,6 +199,40 @@ async def test_digest_handler_sends_parser_errors_then_digest_text():
     assert replies[1] == "digest text"
 
 
+async def test_seed_db_handler_runs_seed_job():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat())
+    orchestrator = _FakeOrchestrator()
+    context = _FakeContext(orchestrator=orchestrator)
+
+    await seed_db_handler(update, context)
+
+    assert orchestrator.seed_calls == 1
+    assert "Синхронизация источников с БД завершена" in message.replies()[0]
+
+
+async def test_seed_db_handler_returns_error_when_orchestrator_missing():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat())
+    context = _FakeContext(orchestrator=None)
+
+    await seed_db_handler(update, context)
+
+    assert message.replies()[0] == ERROR_TEXT
+
+
+async def test_seed_db_handler_returns_error_on_exception():
+    message = _FakeMessage()
+    update = _FakeUpdate(message=message, chat=_FakeChat())
+    orchestrator = _FakeOrchestrator()
+    orchestrator.seed_should_fail = True
+    context = _FakeContext(orchestrator=orchestrator)
+
+    await seed_db_handler(update, context)
+
+    assert message.replies()[0] == ERROR_TEXT
+
+
 async def test_update_dates_to_yesterday_handler_updates_db_dates():
     message = _FakeMessage()
     update = _FakeUpdate(message=message, chat=_FakeChat())
@@ -223,6 +266,7 @@ def test_register_basic_handlers_adds_all_commands():
         "start",
         "myid",
         "info",
+        "seed_db",
         "update_dates_to_yesterday",
         "digest_today",
         "digest_yesterday",

@@ -13,7 +13,7 @@ services:
   bot:
     build: .
     depends_on:
-      - .postgres
+      - postgres
     env_file:
       - .env
     environment:

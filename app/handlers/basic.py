@@ -1,4 +1,5 @@
-﻿import datetime as dt
+﻿import asyncio
+import datetime as dt
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -25,6 +26,7 @@ async def info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "- Ответ на start (/start)\n"
             "- Получить ID чата (/myid)\n"
             "- Получить информацию о командах (/info)\n"
+            "- Синхронизировать БД из Excel (/seed_db)\n"
             "- Обновить даты на вчера (/update_dates_to_yesterday)\n"
             "- Отправить дайджест за сегодня (/digest_today)\n"
             "- Отправить дайджест за вчера (/digest_yesterday)\n"
@@ -94,6 +96,24 @@ async def update_dates_to_yesterday_handler(update: Update, context: ContextType
         )
 
 
+async def seed_db_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    orchestrator = context.application.bot_data.get("orchestrator")
+    if orchestrator is None:
+        if update.message:
+            await update.message.reply_text(ERROR_TEXT)
+        return
+
+    try:
+        await asyncio.to_thread(orchestrator.run_seed_db)
+    except Exception:
+        if update.message:
+            await update.message.reply_text(ERROR_TEXT)
+        return
+
+    if update.message:
+        await update.message.reply_text("Синхронизация источников с БД завершена")
+
+
 async def digest_last_week_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     orchestrator = context.application.bot_data.get("orchestrator")
     if orchestrator is None:
@@ -139,6 +159,7 @@ def register_basic_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("myid", myid_handler))
     application.add_handler(CommandHandler("info", info_handler))
+    application.add_handler(CommandHandler("seed_db", seed_db_handler))
     application.add_handler(CommandHandler("update_dates_to_yesterday", update_dates_to_yesterday_handler))
     application.add_handler(CommandHandler("digest_today", digest_today_handler))
     application.add_handler(CommandHandler("digest_yesterday", digest_yesterday_handler))
