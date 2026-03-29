@@ -1,4 +1,4 @@
-import datetime as dt
+﻿import datetime as dt
 import logging
 from typing import Dict, Optional
 
@@ -12,7 +12,6 @@ class DigestOrchestrator:
     """
 
     def __init__(self, database, parser_manager, composer) -> None:
-        '''Инициируем оркестратор с помощью базы данных, менеджера парсеров и композитора текста'''
         self._database = database
         self._parser = parser_manager
         self._composer = composer
@@ -23,11 +22,11 @@ class DigestOrchestrator:
         date_to: Optional[dt.date] = None,
         update_db_dates: bool = False,
     ) -> Dict:
-        '''
+        """
         Собираем дайджест за указанный период.
         Если даты не указаны, то собираем дайджест за вчерашний день.
-        Если update_db_dates=True, то обновляем даты в базе данных
-        '''
+        Если update_db_dates=True, то обновляем даты в базе данных.
+        """
         effective_date_to = date_to or (dt.date.today() - dt.timedelta(days=1))
 
         sources = self._database.sources()
@@ -51,6 +50,10 @@ class DigestOrchestrator:
             "update_db_dates": update_db_dates,
         }
 
+    def update_dates_to_yesterday(self) -> int:
+        """Обновляет даты новостей в БД на вчерашнюю дату."""
+        return self._database.update_dates_to_yesterday()
+
     async def disconnect(self) -> None:
-        '''Отключаемся от всех ресурсов, которые использовались в процессе сбора дайджеста'''
+        """Отключаемся от ресурсов, используемых в процессе сбора дайджеста."""
         await self._parser.disconnect()

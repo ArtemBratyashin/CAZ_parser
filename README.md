@@ -61,11 +61,11 @@
 - Ответ на start (/start)
 - Получить ID чата (/myid)
 - Получить информацию о командах (/info)
-- Обновить даты на вчера (/update_dates_to_yesterday) - in progress
+- Обновить даты на вчера (/update_dates_to_yesterday)
 - Отправить дайджест за сегодня (/digest_today)
 - Отправить дайджест за вчера (/digest_yesterday)
-- Отправить дайджест за последнюю неделю (/digest_last_week) - in progress
-- Отправить дайджест всех новых новостей (/actual_digest) - in progress
+- Отправить дайджест за последнюю неделю (/digest_last_week)
+- Отправить дайджест всех новых новостей (/actual_digest)
 
 ---
 

@@ -73,3 +73,19 @@ class Database:
                 )
                 session.execute(stmt)
             session.commit()
+
+    def update_dates_to(self, target_date: dt.date) -> int:
+        '''Обновляет last_news_date для всех кафедр на указанную дату. Возвращает количество затронутых строк.'''
+        with self.Session() as session:
+            stmt = update(Department).values(
+                last_news_date=target_date,
+                updated_at=dt.datetime.now(dt.timezone.utc),
+            )
+            result = session.execute(stmt)
+            session.commit()
+            return result.rowcount or 0
+
+    def update_dates_to_yesterday(self) -> int:
+        '''Обновляет даты новостей для всех кафедр на вчерашнюю дату.'''
+        yesterday = dt.date.today() - dt.timedelta(days=1)
+        return self.update_dates_to(yesterday)

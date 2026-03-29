@@ -1,7 +1,10 @@
-import datetime as dt
+﻿import datetime as dt
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+
+
+ERROR_TEXT = "Возникла ошибка"
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,7 +37,7 @@ async def digest_today_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     orchestrator = context.application.bot_data.get("orchestrator")
     if orchestrator is None:
         if update.message:
-            await update.message.reply_text("Возникла ошибка")
+            await update.message.reply_text(ERROR_TEXT)
         return
 
     today = dt.date.today()
@@ -54,7 +57,7 @@ async def digest_yesterday_handler(update: Update, context: ContextTypes.DEFAULT
     orchestrator = context.application.bot_data.get("orchestrator")
     if orchestrator is None:
         if update.message:
-            await update.message.reply_text("Возникла ошибка")
+            await update.message.reply_text(ERROR_TEXT)
         return
 
     yesterday = dt.date.today() - dt.timedelta(days=1)
@@ -70,9 +73,74 @@ async def digest_yesterday_handler(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(result["text"])
 
 
+async def update_dates_to_yesterday_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    orchestrator = context.application.bot_data.get("orchestrator")
+    if orchestrator is None:
+        if update.message:
+            await update.message.reply_text(ERROR_TEXT)
+        return
+
+    try:
+        updated_rows = orchestrator.update_dates_to_yesterday()
+    except Exception:
+        if update.message:
+            await update.message.reply_text(ERROR_TEXT)
+        return
+
+    if update.message:
+        yesterday = dt.date.today() - dt.timedelta(days=1)
+        await update.message.reply_text(
+            f"Даты обновлены на {yesterday.strftime('%d.%m.%Y')}. Обновлено записей: {updated_rows}"
+        )
+
+
+async def digest_last_week_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    orchestrator = context.application.bot_data.get("orchestrator")
+    if orchestrator is None:
+        if update.message:
+            await update.message.reply_text(ERROR_TEXT)
+        return
+
+    today = dt.date.today()
+    last_week = dt.date.today() - dt.timedelta(days=7)
+    result = await orchestrator.collect_digest(
+        date_from=last_week,
+        date_to=today,
+        update_db_dates=False,
+    )
+
+    if update.message:
+        if result["errors"]:
+            await update.message.reply_text("Ошибки при парсинге:\n" + "\n".join(result["errors"]))
+        await update.message.reply_text(result["text"])
+
+
+async def actual_digest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    orchestrator = context.application.bot_data.get("orchestrator")
+    if orchestrator is None:
+        if update.message:
+            await update.message.reply_text(ERROR_TEXT)
+        return
+
+    yesterday = dt.date.today() - dt.timedelta(days=1)
+    result = await orchestrator.collect_digest(
+        date_from=None,
+        date_to=yesterday,
+        update_db_dates=True,
+    )
+
+    if update.message:
+        if result["errors"]:
+            await update.message.reply_text("Ошибки при парсинге:\n" + "\n".join(result["errors"]))
+        await update.message.reply_text(result["text"])
+
+
 def register_basic_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("myid", myid_handler))
     application.add_handler(CommandHandler("info", info_handler))
+    application.add_handler(CommandHandler("update_dates_to_yesterday", update_dates_to_yesterday_handler))
     application.add_handler(CommandHandler("digest_today", digest_today_handler))
     application.add_handler(CommandHandler("digest_yesterday", digest_yesterday_handler))
+    application.add_handler(CommandHandler("digest_last_week", digest_last_week_handler))
+    application.add_handler(CommandHandler("actual_digest", actual_digest_handler))

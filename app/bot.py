@@ -41,6 +41,7 @@ class DigestBotApp:
             .post_shutdown(self._on_shutdown)
             .build()
         )
+        application.bot_data["orchestrator"] = self._orchestrator
         register_basic_handlers(application)
         application.run_polling()
 
