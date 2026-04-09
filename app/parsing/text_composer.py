@@ -64,6 +64,7 @@ class TextComposer:
             message_date = msg.get("date", "неизвестно")
 
         raw = (msg.get("message") or "").strip()
+        raw = raw.replace("*", "")
         raw = " ".join(raw.split())
         preview = raw[: self._message_len] if raw else "[нет текста]"
 

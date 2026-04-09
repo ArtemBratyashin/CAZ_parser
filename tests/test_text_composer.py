@@ -74,6 +74,23 @@ def test_compose_uses_placeholder_when_message_text_is_empty():
     assert "[" in result and "]" in result
 
 
+def test_compose_removes_asterisks_from_message_text():
+    messages = [
+        {
+            "source_name": "SRC",
+            "source_link": "https://example.com",
+            "contact": "c",
+            "date": "2026-02-11",
+            "message": "Важная **** новость **с выделением**",
+        }
+    ]
+
+    result = TextComposer(message_len=100).compose(messages=messages)
+
+    assert "*" not in result
+    assert "Важная новость с выделением" in result
+
+
 def test_compose_formats_valid_date_to_dd_mm_yyyy():
     messages = [
         {

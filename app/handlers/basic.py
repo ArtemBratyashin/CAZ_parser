@@ -1,11 +1,13 @@
-﻿import asyncio
+import asyncio
 import datetime as dt
+import logging
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 
 ERROR_TEXT = "Возникла ошибка"
+logger = logging.getLogger(__name__)
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -26,7 +28,7 @@ async def info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "- Ответ на start (/start)\n"
             "- Получить ID чата (/myid)\n"
             "- Получить информацию о командах (/info)\n"
-            "- Синхронизировать БД из Excel (/seed_db)\n"
+            "- Синхронизировать БД из Python-данных (/seed_db)\n"
             "- Обновить даты на вчера (/update_dates_to_yesterday)\n"
             "- Отправить дайджест за сегодня (/digest_today)\n"
             "- Отправить дайджест за вчера (/digest_yesterday)\n"
@@ -105,9 +107,10 @@ async def seed_db_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     try:
         await asyncio.to_thread(orchestrator.run_seed_db)
-    except Exception:
+    except Exception as exc:
+        logger.exception("seed_db failed")
         if update.message:
-            await update.message.reply_text(ERROR_TEXT)
+            await update.message.reply_text(f"{ERROR_TEXT}: {exc}")
         return
 
     if update.message:

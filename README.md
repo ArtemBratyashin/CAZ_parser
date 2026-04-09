@@ -42,7 +42,7 @@
 2. Примените миграции (создание таблиц):
    ```console
    foo@bar:~$ alembic upgrade head
-3. Перенесите данные из эксель файла в БД:
+3. Заполните Python-список источников в `data/seed_data.py` и синхронизируйте БД:
    ```console
    foo@bar:~$ python -m data.seed_db
 ---

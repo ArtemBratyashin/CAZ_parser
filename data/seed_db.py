@@ -1,7 +1,8 @@
+import datetime as dt
 import os
 import sys
-import pandas as pd
-from datetime import datetime
+from typing import Any, Dict, Iterable, Optional
+
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -10,67 +11,111 @@ project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from app.models.department import Department
 from app.config import Settings
+from app.models.department import Department
+from data.seed_data import DEPARTMENT_SEED_DATA
 
-def parse_date(date_value):
-    """Безопасно превращает значение из Excel в объект даты."""
-    if pd.isna(date_value) or str(date_value).strip() in ["", "-"]:
-        return datetime(2026, 1, 1).date()
-        
-    if isinstance(date_value, datetime):
-        return date_value.date()
-        
+DEFAULT_LAST_NEWS_DATE = dt.date(2026, 1, 1)
+
+
+def _clean_value(value: Any) -> Optional[str]:
+    """Нормализует строковые поля и превращает пустые/дефис в None."""
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if text in ("", "-"):
+        return None
+
+    return text
+
+
+def _parse_last_news_date(value: Any) -> dt.date:
+    """Преобразует дату новости в date. Пустые значения заполняет дефолтом."""
+    if value is None:
+        return DEFAULT_LAST_NEWS_DATE
+
+    if isinstance(value, dt.datetime):
+        return value.date()
+
+    if isinstance(value, dt.date):
+        return value
+
+    text = str(value).strip()
+    if text in ("", "-"):
+        return DEFAULT_LAST_NEWS_DATE
+
     try:
-        return datetime.strptime(str(date_value).strip(), "%Y-%m-%d").date()
+        return dt.datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError:
-        return datetime(2026, 1, 1).date()
+        return DEFAULT_LAST_NEWS_DATE
 
-def seed_database():
-    config = Settings()
-    engine = create_engine(config.db_dsn())
+
+def seed_database(
+    seed_data: Optional[Iterable[Dict[str, Any]]] = None,
+    dsn: Optional[str] = None,
+) -> Dict[str, int]:
+    """Синхронизирует таблицу departments из Python-списка данных."""
+    dsn_to_use = dsn
+    if not dsn_to_use:
+        config = Settings()
+        dsn_to_use = config.db_dsn()
+
+    if not dsn_to_use:
+        raise ValueError("DB_DSN не задан. Невозможно выполнить /seed_db")
+    if isinstance(dsn_to_use, str) and ":***@" in dsn_to_use:
+        raise ValueError(
+            "DB_DSN передан в замаскированном виде (***). "
+            "Передайте полный DSN с реальным паролем."
+        )
+
+    engine = create_engine(dsn_to_use)
     Session = sessionmaker(bind=engine)
 
-    file_path = os.path.join(current_dir, 'temp_sources.xlsx')
-    
-    if not os.path.exists(file_path):
-        print(f"Ошибка: Файл {file_path} не найден!")
-        return
+    rows = list(DEPARTMENT_SEED_DATA if seed_data is None else seed_data)
 
-    df = pd.read_excel(file_path)
-    
+    count_added = 0
+    count_updated = 0
+
     with Session() as session:
-        count_added = 0
-        count_updated = 0
-        
-        for _, row in df.iterrows():
-            name = str(row['Кафедра']).strip()
-            last_date = parse_date(row.get('Последняя дата'))
-            
+        for row in rows:
+            name = _clean_value(row.get("name"))
+            if name is None:
+                continue
+
+            payload = {
+                "contact": _clean_value(row.get("contact")),
+                "website_url": _clean_value(row.get("website_url")),
+                "vk_url": _clean_value(row.get("vk_url")),
+                "tg_url": _clean_value(row.get("tg_url")),
+                "last_news_date": _parse_last_news_date(row.get("last_news_date")),
+            }
+
             stmt = select(Department).where(Department.name == name)
             existing_dep = session.execute(stmt).scalar_one_or_none()
-            
-            if existing_dep:
-                existing_dep.website_url = str(row['Сайт']).strip() if pd.notna(row['Сайт']) and row['Сайт'] != '-' else None
-                existing_dep.vk_url = str(row['Вконтакте']).strip() if pd.notna(row['Вконтакте']) and row['Вконтакте'] != '-' else None
-                existing_dep.tg_url = str(row['Телеграмм']).strip() if pd.notna(row['Телеграмм']) and row['Телеграмм'] != '-' else None
-                existing_dep.last_news_date = last_date
-                count_updated += 1
-            else:
-                new_dep = Department(
-                    name=name,
-                    contact=str(row['Контакт']).strip() if pd.notna(row['Контакт']) else None,
-                    website_url=str(row['Сайт']).strip() if pd.notna(row['Сайт']) and row['Сайт'] != '-' else None,
-                    vk_url=str(row['Вконтакте']).strip() if pd.notna(row['Вконтакте']) and row['Вконтакте'] != '-' else None,
-                    tg_url=str(row['Телеграмм']).strip() if pd.notna(row['Телеграмм']) and row['Телеграмм'] != '-' else None,
-                    last_news_date=last_date
-                )
-                session.add(new_dep)
+
+            if existing_dep is None:
+                session.add(Department(name=name, **payload))
                 count_added += 1
-        
+                continue
+
+            for field, value in payload.items():
+                setattr(existing_dep, field, value)
+            count_updated += 1
+
         session.commit()
-        print(f"Синхронизация завершена!")
-        print(f"Добавлено: {count_added}, Обновлено: {count_updated}")
+
+    result = {
+        "added": count_added,
+        "updated": count_updated,
+        "total": count_added + count_updated,
+    }
+
+    print("Синхронизация завершена!")
+    print(f"Добавлено: {result['added']}, Обновлено: {result['updated']}")
+
+    return result
+
 
 if __name__ == "__main__":
     seed_database()

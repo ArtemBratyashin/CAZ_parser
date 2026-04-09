@@ -230,7 +230,7 @@ async def test_seed_db_handler_returns_error_on_exception():
 
     await seed_db_handler(update, context)
 
-    assert message.replies()[0] == ERROR_TEXT
+    assert message.replies()[0].startswith(f"{ERROR_TEXT}:")
 
 
 async def test_update_dates_to_yesterday_handler_updates_db_dates():
