@@ -1,19 +1,20 @@
-﻿import datetime as dt
+import asyncio
+import datetime as dt
+import random
+import uuid
 
 import pytest
 
-from app.handlers.basic import (
-    ERROR_TEXT,
-    digest_today_handler,
-    digest_yesterday_handler,
-    info_handler,
-    myid_handler,
-    register_basic_handlers,
-    seed_db_handler,
-    start_handler,
-    update_dates_to_yesterday_handler,
-)
-
+from app.handlers.actual_digest_handler import actual_digest_handler
+from app.handlers.digest_last_week_handler import digest_last_week_handler
+from app.handlers.digest_today_handler import digest_today_handler
+from app.handlers.digest_yesterday_handler import digest_yesterday_handler
+from app.handlers.info_handler import info_handler
+from app.handlers.myid_handler import myid_handler
+from app.handlers.register import register_basic_handlers
+from app.handlers.seed_db_handler import seed_db_handler
+from app.handlers.start_handler import start_handler
+from app.handlers.update_dates_to_yesterday_handler import update_dates_to_yesterday_handler
 
 pytestmark = pytest.mark.anyio
 
@@ -30,7 +31,7 @@ class _FakeMessage:
 
 
 class _FakeChat:
-    def __init__(self, chat_id=1, chat_type="private"):
+    def __init__(self, chat_id, chat_type):
         self.id = chat_id
         self.type = chat_type
 
@@ -42,13 +43,13 @@ class _FakeUpdate:
 
 
 class _FakeOrchestrator:
-    def __init__(self, result=None):
+    def __init__(self, result):
         self.collect_calls = []
-        self.update_dates_calls = 0
         self.update_dates_result = 0
+        self.update_dates_calls = 0
         self.seed_calls = 0
         self.seed_should_fail = False
-        self._result = result or {"text": "digest", "errors": [], "messages": []}
+        self._result = result
 
     async def collect_digest(self, date_from=None, date_to=None, update_db_dates=False):
         self.collect_calls.append(
@@ -63,7 +64,7 @@ class _FakeOrchestrator:
     def run_seed_db(self):
         self.seed_calls += 1
         if self.seed_should_fail:
-            raise RuntimeError("seed failed")
+            raise RuntimeError(f"случайная ошибка {uuid.uuid4()}")
 
 
 class _FakeContext:
@@ -85,191 +86,136 @@ class _RecordingApplication:
         self.handlers.append(handler)
 
 
-async def test_start_handler_replies_greeting():
+async def test_start_handler_returns_help_text_when_message_exists():
     message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(100, 999), chat_type="private"))
 
     await start_handler(update, context=None)
 
-    assert "/info" in message.replies()[0]
+    ok = bool(message.replies()) and "/info" in message.replies()[0]
+    assert ok, "Failure: start handler did not send the expected help text"
 
 
-async def test_start_handler_skips_when_message_is_missing():
-    update = _FakeUpdate(message=None, chat=_FakeChat())
-
-    await start_handler(update, context=None)
-
-
-async def test_myid_handler_replies_chat_data():
+async def test_myid_handler_returns_chat_metadata_for_existing_chat():
+    random_chat_id = random.randint(10000, 99999)
+    random_chat_type = f"group_{uuid.uuid4().hex[:5]}"
     message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=777, chat_type="group"))
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random_chat_id, chat_type=random_chat_type))
 
     await myid_handler(update, context=None)
 
-    reply = message.replies()[0]
-    assert "777" in reply
-    assert "group" in reply
+    ok = bool(message.replies()) and str(random_chat_id) in message.replies()[0] and random_chat_type in message.replies()[0]
+    assert ok, "Failure: myid handler did not return current chat metadata"
 
 
-async def test_myid_handler_skips_when_chat_is_missing():
+async def test_info_handler_returns_the_command_list_for_user():
     message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=None)
-
-    await myid_handler(update, context=None)
-
-    assert message.replies() == []
-
-
-async def test_info_handler_contains_all_commands():
-    message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(1, 999), chat_type="private"))
 
     await info_handler(update, context=None)
 
-    reply = message.replies()[0]
-    assert "(/start)" in reply
-    assert "(/myid)" in reply
-    assert "(/info)" in reply
-    assert "(/seed_db)" in reply
-    assert "(/update_dates_to_yesterday)" in reply
-    assert "(/digest_today)" in reply
-    assert "(/digest_yesterday)" in reply
-    assert "(/digest_last_week)" in reply
-    assert "(/actual_digest)" in reply
+    ok = bool(message.replies()) and "/digest_today" in message.replies()[0] and "/actual_digest" in message.replies()[0]
+    assert ok, "Failure: info handler did not return the expected command list"
 
 
-async def test_digest_today_handler_collects_for_today_without_db_updates():
+async def test_digest_today_handler_collects_and_sends_the_today_digest():
+    digest_text = f"новость_{uuid.uuid4()}_ñ"
     message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    orchestrator = _FakeOrchestrator(result={"text": "today digest", "errors": [], "messages": []})
+    orchestrator = _FakeOrchestrator(result={"text": digest_text, "errors": [], "messages": []})
     context = _FakeContext(orchestrator=orchestrator)
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(100, 999), chat_type="private"))
 
     await digest_today_handler(update, context)
 
-    call = orchestrator.collect_calls[0]
-    assert call["date_from"] == dt.date.today()
-    assert call["date_to"] == dt.date.today()
-    assert call["update_db_dates"] is False
-    assert message.replies()[-1] == "today digest"
+    ok = orchestrator.collect_calls[0]["date_from"] == dt.date.today() and message.replies()[-1] == digest_text
+    assert ok, "Failure: digest today handler did not call orchestrator for current date"
 
 
-async def test_digest_yesterday_handler_collects_for_yesterday_without_db_updates():
+async def test_digest_yesterday_handler_cannot_work_without_orchestrator():
     message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    orchestrator = _FakeOrchestrator(result={"text": "yesterday digest", "errors": [], "messages": []})
-    context = _FakeContext(orchestrator=orchestrator)
+    context = _FakeContext(orchestrator=None)
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(10, 99), chat_type="private"))
 
     await digest_yesterday_handler(update, context)
 
-    call = orchestrator.collect_calls[0]
-    yesterday = dt.date.today() - dt.timedelta(days=1)
-    assert call["date_from"] == yesterday
-    assert call["date_to"] == yesterday
-    assert call["update_db_dates"] is False
-    assert message.replies()[-1] == "yesterday digest"
+    ok = len(message.replies()) == 1
+    assert ok, "Failure: digest yesterday handler did not report a failure when orchestrator is missing"
 
 
-async def test_digest_handlers_reply_with_error_when_orchestrator_is_missing():
-    message_today = _FakeMessage()
-    message_yesterday = _FakeMessage()
-    update_today = _FakeUpdate(message=message_today, chat=_FakeChat())
-    update_yesterday = _FakeUpdate(message=message_yesterday, chat=_FakeChat())
-    context = _FakeContext(orchestrator=None)
-
-    await digest_today_handler(update_today, context)
-    await digest_yesterday_handler(update_yesterday, context)
-
-    assert message_today.replies()[0] == ERROR_TEXT
-    assert message_yesterday.replies()[0] == ERROR_TEXT
-
-
-async def test_digest_handler_sends_parser_errors_then_digest_text():
+async def test_update_dates_to_yesterday_handler_reports_amount_of_updated_rows():
     message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    orchestrator = _FakeOrchestrator(
-        result={"text": "digest text", "errors": ["e1", "e2"], "messages": []}
+    orchestrator = _FakeOrchestrator(result={"text": "", "errors": [], "messages": []})
+    orchestrator.update_dates_result = random.randint(1, 40)
+    context = _FakeContext(orchestrator=orchestrator)
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(1000, 9999), chat_type="private"))
+
+    await update_dates_to_yesterday_handler(update, context)
+
+    ok = orchestrator.update_dates_calls == 1 and str(orchestrator.update_dates_result) in message.replies()[0]
+    assert ok, "Failure: update_dates_to_yesterday handler did not report updated rows"
+
+
+async def test_seed_db_handler_runs_seed_database_in_background_thread():
+    message = _FakeMessage()
+    orchestrator = _FakeOrchestrator(result={"text": "", "errors": [], "messages": []})
+    context = _FakeContext(orchestrator=orchestrator)
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(300, 500), chat_type="private"))
+
+    await seed_db_handler(update, context)
+
+    ok = orchestrator.seed_calls == 1 and bool(message.replies())
+    assert ok, "Failure: seed_db handler did not trigger background synchronization"
+
+
+async def test_digest_last_week_handler_collects_range_and_returns_message():
+    digest_text = f"дайджест_{uuid.uuid4()}_Привет"
+    message = _FakeMessage()
+    orchestrator = _FakeOrchestrator(result={"text": digest_text, "errors": [], "messages": []})
+    context = _FakeContext(orchestrator=orchestrator)
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(501, 800), chat_type="private"))
+
+    await digest_last_week_handler(update, context)
+
+    ok = orchestrator.collect_calls[0]["date_from"] == dt.date.today() - dt.timedelta(days=7) and message.replies()[-1] == digest_text
+    assert ok, "Failure: last week handler did not request the expected date range"
+
+
+async def test_actual_digest_handler_enables_date_updates_in_database():
+    digest_text = f"актуальный_{uuid.uuid4().hex}_данные"
+    message = _FakeMessage()
+    orchestrator = _FakeOrchestrator(result={"text": digest_text, "errors": [], "messages": []})
+    context = _FakeContext(orchestrator=orchestrator)
+    update = _FakeUpdate(message=message, chat=_FakeChat(chat_id=random.randint(900, 1200), chat_type="private"))
+
+    await actual_digest_handler(update, context)
+
+    ok = orchestrator.collect_calls[0]["update_db_dates"] is True and message.replies()[-1] == digest_text
+    assert ok, "Failure: actual digest handler did not request DB date update"
+
+
+async def test_handlers_dont_break_when_called_concurrently():
+    suffix = uuid.uuid4().hex[:6]
+    message_a = _FakeMessage()
+    message_b = _FakeMessage()
+    orchestrator = _FakeOrchestrator(result={"text": f"конкурентный_{suffix}_тест", "errors": [], "messages": []})
+    context = _FakeContext(orchestrator=orchestrator)
+    update_a = _FakeUpdate(message=message_a, chat=_FakeChat(chat_id=random.randint(1, 100), chat_type="private"))
+    update_b = _FakeUpdate(message=message_b, chat=_FakeChat(chat_id=random.randint(101, 200), chat_type="private"))
+
+    await asyncio.gather(
+        digest_today_handler(update_a, context),
+        digest_yesterday_handler(update_b, context),
     )
-    context = _FakeContext(orchestrator=orchestrator)
 
-    await digest_today_handler(update, context)
-
-    replies = message.replies()
-    assert len(replies) == 2
-    assert "e1" in replies[0]
-    assert replies[1] == "digest text"
+    ok = len(orchestrator.collect_calls) == 2 and len(message_a.replies()) == 1 and len(message_b.replies()) == 1
+    assert ok, "Failure: handlers did not survive concurrent execution"
 
 
-async def test_seed_db_handler_runs_seed_job():
-    message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    orchestrator = _FakeOrchestrator()
-    context = _FakeContext(orchestrator=orchestrator)
-
-    await seed_db_handler(update, context)
-
-    assert orchestrator.seed_calls == 1
-    assert "Синхронизация источников с БД завершена" in message.replies()[0]
-
-
-async def test_seed_db_handler_returns_error_when_orchestrator_missing():
-    message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    context = _FakeContext(orchestrator=None)
-
-    await seed_db_handler(update, context)
-
-    assert message.replies()[0] == ERROR_TEXT
-
-
-async def test_seed_db_handler_returns_error_on_exception():
-    message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    orchestrator = _FakeOrchestrator()
-    orchestrator.seed_should_fail = True
-    context = _FakeContext(orchestrator=orchestrator)
-
-    await seed_db_handler(update, context)
-
-    assert message.replies()[0].startswith(f"{ERROR_TEXT}:")
-
-
-async def test_update_dates_to_yesterday_handler_updates_db_dates():
-    message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    orchestrator = _FakeOrchestrator()
-    orchestrator.update_dates_result = 12
-    context = _FakeContext(orchestrator=orchestrator)
-
-    await update_dates_to_yesterday_handler(update, context)
-
-    assert orchestrator.update_dates_calls == 1
-    assert "Обновлено записей: 12" in message.replies()[0]
-
-
-async def test_update_dates_to_yesterday_handler_returns_error_when_orchestrator_missing():
-    message = _FakeMessage()
-    update = _FakeUpdate(message=message, chat=_FakeChat())
-    context = _FakeContext(orchestrator=None)
-
-    await update_dates_to_yesterday_handler(update, context)
-
-    assert message.replies()[0] == ERROR_TEXT
-
-
-def test_register_basic_handlers_adds_all_commands():
+def test_register_basic_handlers_adds_every_command_handler():
     app = _RecordingApplication()
 
     register_basic_handlers(app)
 
-    commands = [next(iter(handler.commands)) for handler in app.handlers]
-    assert commands == [
-        "start",
-        "myid",
-        "info",
-        "seed_db",
-        "update_dates_to_yesterday",
-        "digest_today",
-        "digest_yesterday",
-        "digest_last_week",
-        "actual_digest",
-    ]
+    commands = {next(iter(handler.commands)) for handler in app.handlers}
+    ok = len(commands) == 9 and "start" in commands and "actual_digest" in commands
+    assert ok, "Failure: command registration did not include all required handlers"

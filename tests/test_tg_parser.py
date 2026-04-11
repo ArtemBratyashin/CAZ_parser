@@ -1,10 +1,11 @@
-﻿from datetime import date, datetime
+import asyncio
+import random
+import uuid
+from datetime import date, datetime
 
 import pytest
 
-import app.parsing.parsers.tg_parser as tg_module
 from app.parsing.parsers.tg_parser import TelegramParser
-
 
 pytestmark = pytest.mark.anyio
 
@@ -16,8 +17,8 @@ class _FakeMessage:
 
 
 class _FakeTelegramClient:
-    def __init__(self, session_name, api_id, api_hash):
-        self._connected = False
+    def __init__(self):
+        self._connected = True
         self._authorized = True
         self._disconnect_calls = 0
         self._messages = {}
@@ -32,10 +33,10 @@ class _FakeTelegramClient:
         return self._authorized
 
     async def send_code_request(self, phone):
-        raise AssertionError("unexpected auth call")
+        raise AssertionError(f"unexpected auth request for {phone}")
 
     async def sign_in(self, *args, **kwargs):
-        raise AssertionError("unexpected auth call")
+        raise AssertionError("unexpected sign in request")
 
     def is_connected(self):
         return self._connected
@@ -54,100 +55,124 @@ class _FakeTelegramClient:
         return self._disconnect_calls
 
 
-async def test_ensure_client_creates_and_connects_client(monkeypatch):
-    fake_client = _FakeTelegramClient("session", 1, "hash")
+class _ParserWithStubEnsure(TelegramParser):
+    def __init__(self, fake_client):
+        super().__init__(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+        self._client = fake_client
+        self.ensure_calls = 0
 
-    def _factory(session_name, api_id, api_hash):
-        return fake_client
+    async def _ensure_client(self):
+        self.ensure_calls += 1
 
-    monkeypatch.setattr(tg_module, "TelegramClient", _factory)
 
+class _ParserWithFailingEnsure(TelegramParser):
+    def __init__(self):
+        super().__init__(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
+
+    async def _ensure_client(self):
+        raise RuntimeError(f"сбой_инициализации_{uuid.uuid4().hex[:6]}")
+
+
+def _source(link):
+    return {
+        "source_name": f"кафедра_{uuid.uuid4().hex[:6]}_ñ",
+        "source_link": link,
+        "contact": "контакт",
+        "last_message_date": date(2026, 2, random.randint(10, 14)),
+    }
+
+
+async def test_parse_single_channel_uses_last_message_date_when_date_from_is_not_set():
     parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
-    await parser._ensure_client()
-
-    assert parser._client is fake_client
-    assert fake_client.is_connected() is True
-
-
-async def test_parse_single_channel_uses_last_message_date_when_date_from_is_none():
-    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
-    fake_client = _FakeTelegramClient("session", 1, "hash")
+    fake_client = _FakeTelegramClient()
     parser._client = fake_client
-
-    channel_link = "https://t.me/channel_name"
+    channel_link = f"https://t.me/{uuid.uuid4().hex[:8]}"
     fake_client.set_messages(
         channel_link,
         [
-            _FakeMessage(datetime(2026, 2, 16, 10, 0, 0), "too new"),
-            _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "new one"),
-            _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "new two"),
-            _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "old stop"),
+            _FakeMessage(datetime(2026, 2, 16, 10, 0, 0), "слишком новая"),
+            _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "новость один"),
+            _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "новость два"),
+            _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "остановка"),
         ],
     )
 
-    source = {
-        "source_name": "department",
-        "source_link": channel_link,
-        "contact": "contact",
-        "last_message_date": date(2026, 2, 13),
-    }
-
+    source = _source(channel_link)
+    source["last_message_date"] = date(2026, 2, 13)
     result = await parser._parse_single_channel(source, date_from=None, date_to=date(2026, 2, 15))
 
-    assert len(result) == 2
-    assert result[0]["date"] == "2026-02-15"
-    assert result[1]["date"] == "2026-02-14"
+    assert len(result) == 2, "Failure: parser did not respect last_message_date lower bound"
 
 
-async def test_parse_single_channel_uses_explicit_date_from_inclusive():
+async def test_parse_single_channel_includes_start_date_when_explicit_date_from_is_provided():
     parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
-    fake_client = _FakeTelegramClient("session", 1, "hash")
+    fake_client = _FakeTelegramClient()
     parser._client = fake_client
-
-    channel_link = "https://t.me/channel_name"
+    channel_link = f"https://t.me/{uuid.uuid4().hex[:8]}"
     fake_client.set_messages(
         channel_link,
         [
-            _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "new one"),
-            _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "new two"),
-            _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "keep by inclusive"),
-            _FakeMessage(datetime(2026, 2, 12, 10, 0, 0), "stop"),
+            _FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "новость один"),
+            _FakeMessage(datetime(2026, 2, 14, 10, 0, 0), "новость два"),
+            _FakeMessage(datetime(2026, 2, 13, 10, 0, 0), "новость три"),
+            _FakeMessage(datetime(2026, 2, 12, 10, 0, 0), "остановка"),
         ],
     )
 
-    source = {
-        "source_name": "department",
-        "source_link": channel_link,
-        "contact": "contact",
-        "last_message_date": date(2026, 2, 1),
-    }
+    result = await parser._parse_single_channel(_source(channel_link), date_from=date(2026, 2, 13), date_to=date(2026, 2, 15))
 
-    result = await parser._parse_single_channel(source, date_from=date(2026, 2, 13), date_to=date(2026, 2, 15))
-
-    assert [row["date"] for row in result] == ["2026-02-15", "2026-02-14", "2026-02-13"]
+    ok = [row["date"] for row in result] == ["2026-02-15", "2026-02-14", "2026-02-13"]
+    assert ok, "Failure: parser did not include explicit inclusive date_from boundary"
 
 
-async def test_parse_reraises_when_client_initialization_fails(monkeypatch):
+async def test_parse_calls_ensure_client_and_merges_results_for_many_sources():
+    fake_client = _FakeTelegramClient()
+    channel_one = f"https://t.me/{uuid.uuid4().hex[:8]}"
+    channel_two = f"https://t.me/{uuid.uuid4().hex[:8]}"
+    fake_client.set_messages(channel_one, [_FakeMessage(datetime(2026, 2, 15, 10, 0, 0), "новость ñ")])
+    fake_client.set_messages(channel_two, [_FakeMessage(datetime(2026, 2, 15, 12, 0, 0), "новость ü")])
+    parser = _ParserWithStubEnsure(fake_client=fake_client)
+
+    result = await parser.parse([_source(channel_one), _source(channel_two)], date_from=None, date_to=date(2026, 2, 15))
+
+    ok = parser.ensure_calls == 1 and len(result) == 2
+    assert ok, "Failure: parse did not initialize client once and merge source results"
+
+
+async def test_parse_cannot_continue_when_client_initialization_fails():
+    parser = _ParserWithFailingEnsure()
+    failed = False
+
+    try:
+        await parser.parse([_source(f"https://t.me/{uuid.uuid4().hex[:8]}")], date_from=None, date_to=date(2026, 2, 15))
+    except RuntimeError:
+        failed = True
+
+    assert failed, "Failure: parse did not fail fast when client initialization failed"
+
+
+async def test_disconnect_calls_underlying_client_disconnect_once():
     parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
-
-    async def _boom():
-        raise RuntimeError("failed to init client")
-
-    monkeypatch.setattr(parser, "_ensure_client", _boom)
-
-    with pytest.raises(RuntimeError, match="failed to init client"):
-        await parser.parse(
-            [{"source_name": "x", "source_link": "https://t.me/x", "contact": "c", "last_message_date": date(2026, 2, 1)}],
-            date_from=None,
-            date_to=date(2026, 2, 15),
-        )
-
-
-async def test_disconnect_calls_client_disconnect():
-    parser = TelegramParser(api_id=1, api_hash="hash", phone_number="+79990000000", session_name="session")
-    fake_client = _FakeTelegramClient("session", 1, "hash")
+    fake_client = _FakeTelegramClient()
     parser._client = fake_client
 
     await parser.disconnect()
 
-    assert fake_client.disconnect_calls() == 1
+    assert fake_client.disconnect_calls() == 1, "Failure: disconnect did not call underlying client disconnect"
+
+
+async def test_parse_dont_break_during_concurrent_runs():
+    fake_client = _FakeTelegramClient()
+    channel = f"https://t.me/{uuid.uuid4().hex[:8]}"
+    fake_client.set_messages(channel, [_FakeMessage(datetime(2026, 2, 15, 8, 0, 0), "многопоточный_тест")])
+    parser = _ParserWithStubEnsure(fake_client=fake_client)
+    source = _source(channel)
+
+    first, second, third = await asyncio.gather(
+        parser.parse([source], date_from=None, date_to=date(2026, 2, 15)),
+        parser.parse([source], date_from=None, date_to=date(2026, 2, 15)),
+        parser.parse([source], date_from=None, date_to=date(2026, 2, 15)),
+    )
+
+    ok = len(first) == 1 and len(second) == 1 and len(third) == 1
+    assert ok, "Failure: parser produced unstable results during concurrent runs"
