@@ -1,22 +1,16 @@
 import datetime as dt
 import logging
+from typing import Any, Dict, List
 
-from handlers.basic import register_basic_handlers
 from telegram.ext import Application, ContextTypes
+
+from app.handlers import register_basic_handlers
 
 logger = logging.getLogger(__name__)
 
 
 class DigestBotApp:
-    '''
-    Класс для управления ботом, который отправляет ежедневный дайджест.
-    Он инициализируется оркестратором для сбора данных и временем для ежедневной отправки.
-
-    Example:
-        DigestBotApp(
-            ...
-        ).run()
-    '''
+    """Запускает и обслуживает Telegram-бота."""
 
     def __init__(
         self,
@@ -26,6 +20,7 @@ class DigestBotApp:
         orchestrator,
         daily_time: dt.time,
     ) -> None:
+        """Сохраняет зависимости и параметры запуска."""
         self._token = token
         self._chat_id = chat_id
         self._chat_id_errors = chat_id_errors
@@ -33,7 +28,7 @@ class DigestBotApp:
         self._daily_time = daily_time or dt.time(hour=17, minute=0)
 
     def run(self) -> None:
-        '''Запуск бота и постановка на расписание ежедневной отправки дайджеста и активация handlers'''
+        """Запускает polling и регистрирует обработчики."""
         application = (
             Application.builder()
             .token(self._token)
@@ -46,7 +41,7 @@ class DigestBotApp:
         application.run_polling()
 
     async def _on_startup(self, application: Application) -> None:
-        '''Постановка на расписание ежедневной отправки дайджеста'''
+        """Ставит ежедневную задачу отправки дайджеста."""
         job = application.job_queue.run_daily(
             self._send_digest,
             time=self._daily_time,
@@ -56,7 +51,7 @@ class DigestBotApp:
         logger.info("Next run time: %s", getattr(job, "next_run_time", None))
 
     async def _send_digest(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        '''Сбор и отправка дайджеста, а также обработка ошибок'''
+        """Собирает дайджест и отправляет его в чаты."""
         try:
             result = await self._orchestrator.collect_digest(
                 date_from=None,
@@ -64,13 +59,12 @@ class DigestBotApp:
                 update_db_dates=True,
             )
 
-            if result["errors"]:
-                await context.bot.send_message(
-                    chat_id=self._chat_id_errors,
-                    text="Проблемы при парсинге источников:\n\n" + "\n".join(result["errors"]),
-                )
+            for report in self._error_reports(result):
+                await context.bot.send_message(chat_id=self._chat_id_errors, text=report, parse_mode=None)
 
-            await context.bot.send_message(chat_id=self._chat_id, text=result["text"], parse_mode=None)
+            for text in self._digest_texts(result):
+                await context.bot.send_message(chat_id=self._chat_id, text=text, parse_mode=None)
+
             logger.info("Scheduled digest sent")
 
         except Exception:
@@ -81,6 +75,61 @@ class DigestBotApp:
             )
 
     async def _on_shutdown(self, application: Application) -> None:
-        '''Деинициализация оркестратора при завершении работы бота'''
+        """Закрывает внешние ресурсы оркестратора."""
         await self._orchestrator.disconnect()
         logger.info("Orchestrator disconnected")
+
+    def _digest_texts(self, result: Dict[str, Any]) -> List[str]:
+        """Нормализует дайджест к списку сообщений."""
+        values = result.get("texts")
+        if isinstance(values, list):
+            return [value for value in values if isinstance(value, str) and value]
+
+        value = result.get("text")
+        if isinstance(value, str) and value:
+            return [value]
+
+        return []
+
+    def _error_reports(self, result: Dict[str, Any]) -> List[str]:
+        """Собирает отчеты для чата ошибок."""
+        stats = result.get("stats") or {}
+        stat_message = "\n".join(
+            [
+                "Статистика парсинга по источникам",
+                f"Найдены новости: {stats.get('sources_with_news', 0)}",
+                f"Нет новостей: {stats.get('sources_without_news', 0)}",
+                f"Не обработались: {stats.get('sources_failed', 0)}",
+                f"Нет парсера: {stats.get('sources_without_parser', 0)}",
+                f"Всего источников: {stats.get('sources_total', 0)}",
+            ]
+        )
+
+        reports = self._split_text(stat_message)
+        errors = result.get("errors") or []
+        if errors:
+            error_block = "Проблемы при парсинге источников:\n\n" + "\n".join(errors)
+            reports.extend(self._split_text(error_block))
+
+        return reports
+
+    def _split_text(self, text: str, limit: int = 4000) -> List[str]:
+        """Разбивает длинный текст на части до лимита."""
+        if len(text) <= limit:
+            return [text]
+
+        parts: List[str] = []
+        left = text
+        while left:
+            if len(left) <= limit:
+                parts.append(left)
+                break
+
+            split_at = left.rfind("\n", 0, limit + 1)
+            if split_at <= 0:
+                split_at = limit
+
+            parts.append(left[:split_at])
+            left = left[split_at:].lstrip("\n")
+
+        return [part for part in parts if part]
