@@ -145,14 +145,8 @@ class ParserManager:
 
     def _count_sources_with_news(self, source_items: List[Dict], messages: List[Dict]) -> int:
         """Считает, для скольких источников есть хотя бы одна новость."""
-        news_keys = {self._source_key(message) for message in messages}
-        return sum(1 for source in source_items if self._source_key(source) in news_keys)
-
-    def _source_key(self, value: Dict) -> str:
-        """Строит ключ источника по имени и ссылке."""
-        name = value.get("source_name")
-        link = value.get("source_link")
-        return f"{name}|{link}"
+        news_keys = {(message.get("source_name"), message.get("source_link")) for message in messages}
+        return sum(1 for source in source_items if (source.get("source_name"), source.get("source_link")) in news_keys)
 
     async def disconnect(self) -> None:
         """Вызывает disconnect у доступных парсеров."""

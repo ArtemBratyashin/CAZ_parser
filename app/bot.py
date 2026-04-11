@@ -105,31 +105,10 @@ class DigestBotApp:
             ]
         )
 
-        reports = self._split_text(stat_message)
+        reports = [stat_message]
         errors = result.get("errors") or []
         if errors:
             error_block = "Проблемы при парсинге источников:\n\n" + "\n".join(errors)
-            reports.extend(self._split_text(error_block))
+            reports.append(error_block)
 
         return reports
-
-    def _split_text(self, text: str, limit: int = 4000) -> List[str]:
-        """Разбивает длинный текст на части до лимита."""
-        if len(text) <= limit:
-            return [text]
-
-        parts: List[str] = []
-        left = text
-        while left:
-            if len(left) <= limit:
-                parts.append(left)
-                break
-
-            split_at = left.rfind("\n", 0, limit + 1)
-            if split_at <= 0:
-                split_at = limit
-
-            parts.append(left[:split_at])
-            left = left[split_at:].lstrip("\n")
-
-        return [part for part in parts if part]

@@ -36,10 +36,20 @@ def test_error_reports_include_required_source_statistics():
     assert ok, "Failure: bot did not include required parsing statistics in error report"
 
 
-def test_split_text_cannot_return_parts_longer_than_limit():
-    parts = _bot()._split_text("x" * 9000, limit=4000)
-    ok = len(parts) == 3 and all(len(part) <= 4000 for part in parts)
-    assert ok, "Failure: split_text did not enforce the 4000-symbol limit"
+def test_error_reports_return_separate_stats_and_error_blocks_without_split():
+    result = {
+        "errors": ["first", "second"],
+        "stats": {
+            "sources_total": 2,
+            "sources_with_news": 1,
+            "sources_without_news": 0,
+            "sources_failed": 1,
+            "sources_without_parser": 0,
+        },
+    }
+    reports = _bot()._error_reports(result)
+    ok = len(reports) == 2 and reports[0].startswith("Статистика парсинга") and "first" in reports[1]
+    assert ok, "Failure: bot error reports must be returned as plain blocks without text splitting"
 
 
 def test_digest_texts_returns_text_array_when_result_contains_texts():
