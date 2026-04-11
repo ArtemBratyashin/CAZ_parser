@@ -1,3 +1,5 @@
+"""Синхронизирует таблицу кафедр из Python-списка."""
+
 import datetime as dt
 import os
 import sys
@@ -19,7 +21,7 @@ DEFAULT_LAST_NEWS_DATE = dt.date(2026, 1, 1)
 
 
 def _clean_value(value: Any) -> Optional[str]:
-    """Нормализует строковые поля и превращает пустые/дефис в None."""
+    """Очищает строку и возвращает None для пустых значений."""
     if value is None:
         return None
 
@@ -31,7 +33,7 @@ def _clean_value(value: Any) -> Optional[str]:
 
 
 def _parse_last_news_date(value: Any) -> dt.date:
-    """Преобразует дату новости в date. Пустые значения заполняет дефолтом."""
+    """Преобразует дату новости или берет значение по умолчанию."""
     if value is None:
         return DEFAULT_LAST_NEWS_DATE
 
@@ -55,7 +57,7 @@ def seed_database(
     seed_data: Optional[Iterable[Dict[str, Any]]] = None,
     dsn: Optional[str] = None,
 ) -> Dict[str, int]:
-    """Синхронизирует таблицу departments из Python-списка данных."""
+    """Обновляет и добавляет кафедры в БД."""
     dsn_to_use = dsn
     if not dsn_to_use:
         config = Settings()
@@ -70,14 +72,13 @@ def seed_database(
         )
 
     engine = create_engine(dsn_to_use)
-    Session = sessionmaker(bind=engine)
-
+    session_factory = sessionmaker(bind=engine)
     rows = list(DEPARTMENT_SEED_DATA if seed_data is None else seed_data)
 
     count_added = 0
     count_updated = 0
 
-    with Session() as session:
+    with session_factory() as session:
         for row in rows:
             name = _clean_value(row.get("name"))
             if name is None:

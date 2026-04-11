@@ -6,11 +6,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    pass
+    """Базовый класс SQLAlchemy-моделей."""
 
 
 class Department(Base):
+    """Описывает источник новостей кафедры."""
+
     __tablename__ = "departments"
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     contact: Mapped[Optional[str]] = mapped_column(String(255))
@@ -21,4 +24,5 @@ class Department(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:
+        """Возвращает строку для отладки."""
         return f"<Department(name={self.name!r}, last_news={self.last_news_date})>"

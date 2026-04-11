@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramParser:
+    """Парсит Telegram-каналы через Telethon."""
+
     def __init__(
         self,
         api_id: int,
@@ -15,6 +17,7 @@ class TelegramParser:
         phone_number: str,
         session_name: str = "user_session",
     ):
+        """Сохраняет параметры клиента Telegram."""
         self._session_name = session_name
         self._api_id = api_id
         self._api_hash = api_hash
@@ -27,6 +30,7 @@ class TelegramParser:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict]:
+        """Собирает новости из переданных каналов."""
         await self._ensure_client()
         all_results: List[Dict] = []
 
@@ -40,6 +44,7 @@ class TelegramParser:
         return all_results
 
     async def _ensure_client(self) -> None:
+        """Создает и авторизует клиент при необходимости."""
         if self._client and self._client.is_connected():
             return
 
@@ -67,6 +72,7 @@ class TelegramParser:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict]:
+        """Парсит один канал в заданном диапазоне."""
         results: List[Dict] = []
 
         try:
@@ -76,8 +82,6 @@ class TelegramParser:
             last_date = self._to_date(source.get("last_message_date"))
             start_date = self._to_date(date_from)
             end_date = self._to_date(date_to)
-
-            # If explicit date_from is not provided, use DB date boundary as before.
             lower_bound = start_date if start_date is not None else last_date
             inclusive_start = start_date is not None
 
@@ -122,6 +126,7 @@ class TelegramParser:
 
     @staticmethod
     def _to_date(value) -> Optional[date]:
+        """Преобразует значение к объекту date."""
         if value is None:
             return None
         if isinstance(value, date):
@@ -140,6 +145,7 @@ class TelegramParser:
         return None
 
     async def disconnect(self) -> None:
+        """Закрывает Telegram-сессию."""
         if self._client:
             await self._client.disconnect()
             logger.info("Telethon session closed")

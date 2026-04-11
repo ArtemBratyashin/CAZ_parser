@@ -4,15 +4,15 @@ from dotenv import load_dotenv
 
 
 class Settings:
-    '''
+    """
     Класс для управления переменными окружения.
 
     Example:
         db_dsn = Settings(env_file=".env").db_dsn()
-    '''
+    """
 
     def __init__(self, env_file: str = None) -> None:
-        '''Загружает переменные окружения из указанного файла .env или из системных переменных.'''
+        """Загружает переменные окружения из указанного файла .env или из системных переменных."""
         load_dotenv(dotenv_path=env_file)
 
         self._writer_token = self._get_required("WRITER_TOKEN")
@@ -27,7 +27,7 @@ class Settings:
         self._sending_minute = int(self._get_required("SENDING_MINUTES"))
 
     def _get_required(self, key: str) -> str:
-        '''Получает и проверяет переменную окружения.'''
+        """Получает и проверяет переменную окружения."""
         value = os.getenv(key)
         if not value:
             raise ValueError(f"Переменная окружения {key} отсутствует!")

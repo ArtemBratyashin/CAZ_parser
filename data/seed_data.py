@@ -1,4 +1,4 @@
-﻿"""Seed data for departments loaded by data.seed_db."""
+﻿"""Справочник кафедр для первичного заполнения БД."""
 
 from typing import Any, Dict, List
 

@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
@@ -8,18 +8,22 @@ logger = logging.getLogger(__name__)
 
 
 class VkParser:
+    """Парсит группы и паблики VK."""
+
     def __init__(
         self,
         token: str,
         session_name: str = "vk_session",
         api_version: str = "5.199",
     ):
+        """Сохраняет параметры VK API."""
         self._token = token
         self._vk_session: Optional[vk_api.VkApi] = None
         self._vk = None
         self._api_version = api_version
 
     def _ensure_client(self) -> None:
+        """Инициализирует VK-клиент."""
         if self._vk is not None:
             return
 
@@ -33,19 +37,16 @@ class VkParser:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict]:
-        try:
-            self._ensure_client()
-            results: List[Dict] = []
-            logger.info("Starting VK parsing for %d groups", len(sources))
+        """Парсит список VK-источников."""
+        self._ensure_client()
+        results: List[Dict] = []
+        logger.info("Starting VK parsing for %d groups", len(sources))
 
-            for source in sources:
-                group_news = await self._parse_single_group(source, date_from=date_from, date_to=date_to)
-                results.extend(group_news)
+        for source in sources:
+            group_news = await self._parse_single_group(source, date_from=date_from, date_to=date_to)
+            results.extend(group_news)
 
-            return results
-        except Exception as exc:
-            logger.error("VK critical error: %s", exc)
-            return []
+        return results
 
     async def _parse_single_group(
         self,
@@ -53,16 +54,14 @@ class VkParser:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict]:
+        """Парсит одну VK-группу."""
         results: List[Dict] = []
 
         try:
             group_id = self._extract_group_identifier(source["source_link"])
             last_date = self._to_date(source.get("last_message_date"))
-
             start_date = self._to_date(date_from)
             end_date = self._to_date(date_to)
-
-            # If explicit date_from is not provided, use DB date boundary as before.
             lower_bound = start_date if start_date is not None else last_date
             inclusive_start = start_date is not None
 
@@ -121,7 +120,6 @@ class VkParser:
 
                 if stop:
                     break
-
                 params["offset"] += params["count"]
 
         except Exception as exc:
@@ -130,10 +128,12 @@ class VkParser:
         return results
 
     async def disconnect(self) -> None:
+        """Вызывается при завершении работы."""
         logger.info("VkParser disconnect called")
 
     @staticmethod
     def _extract_group_identifier(url: str) -> str:
+        """Извлекает идентификатор группы из URL."""
         last = url.rstrip("/").split("/")[-1]
         if last.startswith("public"):
             return last[6:]
@@ -143,6 +143,7 @@ class VkParser:
 
     @staticmethod
     def _to_date(value) -> Optional[date]:
+        """Преобразует значение к объекту date."""
         if value is None:
             return None
         if isinstance(value, date):

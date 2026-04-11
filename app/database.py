@@ -2,25 +2,24 @@ import datetime as dt
 import logging
 from typing import Dict, List
 
-from models.department import Department
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
+
+from app.models.department import Department
 
 logger = logging.getLogger(__name__)
 
 
 class Database:
-    '''
-    Класс для работы с базой данных. Он использует SQLAlchemy для взаимодействия с базой данных.
-    '''
+    """Работает с таблицей источников."""
 
     def __init__(self, dsn: str) -> None:
-        '''Принимает DSN (строку подключения) при инициализации.'''
+        """Создает engine и фабрику сессий."""
         self.engine = create_engine(dsn)
         self.Session = sessionmaker(bind=self.engine)
 
     def sources(self) -> List[Dict]:
-        '''Возвращает список источников из БД.'''
+        """Возвращает плоский список источников."""
         with self.Session() as session:
             stmt = select(Department)
             departments = session.scalars(stmt).all()
@@ -47,22 +46,22 @@ class Database:
             return result
 
     def update_dates(self, messages: List[Dict]) -> None:
-        '''Обновляет даты новостей и время последнего прохода бота.'''
+        """Обновляет last_news_date по сообщениям."""
         with self.Session() as session:
-            for m in messages:
-                name = m.get("source_name")
-                raw_date = m.get("date")
+            for message in messages:
+                name = message.get("source_name")
+                raw_date = message.get("date")
 
                 if isinstance(raw_date, str):
                     try:
                         new_date = dt.datetime.strptime(raw_date, "%Y-%m-%d").date()
                     except ValueError:
-                        logger.error(f"❌ Неверный формат даты в сообщении: {raw_date}")
+                        logger.error("Неверный формат даты в сообщении: %s", raw_date)
                         continue
                 elif isinstance(raw_date, dt.date):
                     new_date = raw_date
                 else:
-                    logger.warning(f"⚠️ Неподдерживаемый тип даты для {name}: {type(raw_date)}")
+                    logger.warning("Неподдерживаемый тип даты для %s: %s", name, type(raw_date))
                     continue
 
                 stmt = (
@@ -75,7 +74,7 @@ class Database:
             session.commit()
 
     def update_dates_to(self, target_date: dt.date) -> int:
-        '''Обновляет last_news_date для всех кафедр на указанную дату. Возвращает количество затронутых строк.'''
+        """Ставит одинаковую дату всем кафедрам."""
         with self.Session() as session:
             stmt = update(Department).values(
                 last_news_date=target_date,
@@ -86,6 +85,6 @@ class Database:
             return result.rowcount or 0
 
     def update_dates_to_yesterday(self) -> int:
-        '''Обновляет даты новостей для всех кафедр на вчерашнюю дату.'''
+        """Ставит вчерашнюю дату всем кафедрам."""
         yesterday = dt.date.today() - dt.timedelta(days=1)
         return self.update_dates_to(yesterday)
