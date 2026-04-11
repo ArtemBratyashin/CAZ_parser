@@ -2,15 +2,15 @@
 
 from telegram.ext import Application, CommandHandler
 
-from app.handlers.actual_digest_handler import actual_digest_handler
-from app.handlers.digest_last_week_handler import digest_last_week_handler
-from app.handlers.digest_today_handler import digest_today_handler
-from app.handlers.digest_yesterday_handler import digest_yesterday_handler
-from app.handlers.info_handler import info_handler
-from app.handlers.myid_handler import myid_handler
-from app.handlers.seed_db_handler import seed_db_handler
-from app.handlers.start_handler import start_handler
-from app.handlers.update_dates_to_yesterday_handler import update_dates_to_yesterday_handler
+from handlers.actual_digest_handler import actual_digest_handler
+from handlers.digest_last_week_handler import digest_last_week_handler
+from handlers.digest_today_handler import digest_today_handler
+from handlers.digest_yesterday_handler import digest_yesterday_handler
+from handlers.info_handler import info_handler
+from handlers.myid_handler import myid_handler
+from handlers.seed_db_handler import seed_db_handler
+from handlers.start_handler import start_handler
+from handlers.update_dates_to_yesterday_handler import update_dates_to_yesterday_handler
 
 
 def register_basic_handlers(application: Application) -> None:

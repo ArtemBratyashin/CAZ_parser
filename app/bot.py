@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from telegram.ext import Application, ContextTypes
 
-from app.handlers import register_basic_handlers
+from handlers.register import register_basic_handlers
 
 logger = logging.getLogger(__name__)
 

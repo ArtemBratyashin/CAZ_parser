@@ -5,7 +5,7 @@ from typing import Dict, List
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
 
-from app.models.department import Department
+from models.department import Department
 
 logger = logging.getLogger(__name__)
 
