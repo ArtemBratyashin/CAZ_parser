@@ -2,9 +2,8 @@ import datetime as dt
 import logging
 from typing import Any, Dict, List
 
-from telegram.ext import Application, ContextTypes
-
 from handlers.register import register_basic_handlers
+from telegram.ext import Application, ContextTypes
 
 logger = logging.getLogger(__name__)
 

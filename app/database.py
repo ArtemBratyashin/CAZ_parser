@@ -2,10 +2,9 @@ import datetime as dt
 import logging
 from typing import Dict, List
 
+from models.department import Department
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
-
-from models.department import Department
 
 logger = logging.getLogger(__name__)
 
