@@ -28,18 +28,24 @@ def test_compose_sorts_messages_by_date_in_descending_order():
     composer = TextComposer(message_len=120)
     texts = composer.compose(messages=[_message("2026-02-10", "старый"), _message("2026-02-11", "новый_ñ")])
     text = "\n".join(texts)
-    assert text.find("2026-02-11") == -1 and text.find("11.02.2026") < text.find("10.02.2026"), "Failure: compose did not keep descending date order"
+    assert text.find("2026-02-11") == -1 and text.find("11.02.2026") < text.find(
+        "10.02.2026"
+    ), "Failure: compose did not keep descending date order"
 
 
 def test_compose_truncates_message_text_to_configured_limit():
     limit = random.randint(8, 14)
     source_text = "абвгдежзийклмнопрстуфхцчшщ"
     text = "\n".join(TextComposer(message_len=limit).compose(messages=[_message("2026-02-11", source_text)]))
-    assert source_text[:limit] in text and source_text[: limit + 1] not in text, "Failure: compose did not truncate text by configured length"
+    assert (
+        source_text[:limit] in text and source_text[: limit + 1] not in text
+    ), "Failure: compose did not truncate text by configured length"
 
 
 def test_compose_removes_markdown_asterisks_from_message_body():
-    text = "\n".join(TextComposer(message_len=140).compose(messages=[_message("2026-02-11", "Важная **новость** для кафедры")]))
+    text = "\n".join(
+        TextComposer(message_len=140).compose(messages=[_message("2026-02-11", "Важная **новость** для кафедры")])
+    )
     assert "*" not in text, "Failure: compose did not remove asterisks from message body"
 
 
@@ -51,7 +57,9 @@ def test_compose_keeps_raw_date_when_date_format_is_invalid():
 
 def test_compose_splits_output_into_chunks_not_longer_than_4000_symbols():
     large_text = "ñ" * 12000
-    texts = TextComposer(message_len=12000, max_message_size=4000).compose(messages=[_message("2026-02-11", large_text)])
+    texts = TextComposer(message_len=12000, max_message_size=4000).compose(
+        messages=[_message("2026-02-11", large_text)]
+    )
     ok = len(texts) >= 3 and all(len(text) <= 4000 for text in texts)
     assert ok, "Failure: compose did not split digest text into chunks of 4000 symbols"
 

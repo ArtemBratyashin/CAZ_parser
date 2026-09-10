@@ -52,9 +52,7 @@ class _FakeOrchestrator:
         self._result = result
 
     async def collect_digest(self, date_from=None, date_to=None, update_db_dates=False):
-        self.collect_calls.append(
-            {"date_from": date_from, "date_to": date_to, "update_db_dates": update_db_dates}
-        )
+        self.collect_calls.append({"date_from": date_from, "date_to": date_to, "update_db_dates": update_db_dates})
         return self._result
 
     def update_dates_to_yesterday(self):
@@ -104,7 +102,11 @@ async def test_myid_handler_returns_chat_metadata_for_existing_chat():
 
     await myid_handler(update, context=None)
 
-    ok = bool(message.replies()) and str(random_chat_id) in message.replies()[0] and random_chat_type in message.replies()[0]
+    ok = (
+        bool(message.replies())
+        and str(random_chat_id) in message.replies()[0]
+        and random_chat_type in message.replies()[0]
+    )
     assert ok, "Failure: myid handler did not return current chat metadata"
 
 
@@ -114,7 +116,9 @@ async def test_info_handler_returns_the_command_list_for_user():
 
     await info_handler(update, context=None)
 
-    ok = bool(message.replies()) and "/digest_today" in message.replies()[0] and "/actual_digest" in message.replies()[0]
+    ok = (
+        bool(message.replies()) and "/digest_today" in message.replies()[0] and "/actual_digest" in message.replies()[0]
+    )
     assert ok, "Failure: info handler did not return the expected command list"
 
 
@@ -176,7 +180,10 @@ async def test_digest_last_week_handler_collects_range_and_returns_message():
 
     await digest_last_week_handler(update, context)
 
-    ok = orchestrator.collect_calls[0]["date_from"] == dt.date.today() - dt.timedelta(days=7) and message.replies()[-1] == digest_text
+    ok = (
+        orchestrator.collect_calls[0]["date_from"] == dt.date.today() - dt.timedelta(days=7)
+        and message.replies()[-1] == digest_text
+    )
     assert ok, "Failure: last week handler did not request the expected date range"
 
 

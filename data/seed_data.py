@@ -316,4 +316,3 @@ DEPARTMENT_SEED_DATA: List[Dict[str, Any]] = [
         'last_news_date': None,
     },
 ]
-

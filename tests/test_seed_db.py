@@ -25,7 +25,9 @@ def test_clean_value_returns_trimmed_unicode_text():
 
 def test_parse_last_news_date_returns_default_for_empty_marker():
     parsed = _parse_last_news_date("-")
-    assert parsed == DEFAULT_LAST_NEWS_DATE, "Failure: parse_last_news_date did not return default date for marker value"
+    assert (
+        parsed == DEFAULT_LAST_NEWS_DATE
+    ), "Failure: parse_last_news_date did not return default date for marker value"
 
 
 def test_parse_last_news_date_parses_random_iso_string():
@@ -42,5 +44,7 @@ def test_parse_last_news_date_keeps_existing_date_object():
 
 
 def test_seed_data_contains_non_empty_department_records():
-    has_data = len(DEPARTMENT_SEED_DATA) > 0 and any("Ф" in row["name"] for row in DEPARTMENT_SEED_DATA if "name" in row)
+    has_data = len(DEPARTMENT_SEED_DATA) > 0 and any(
+        "Ф" in row["name"] for row in DEPARTMENT_SEED_DATA if "name" in row
+    )
     assert has_data, "Failure: seed data list did not contain expected department records"

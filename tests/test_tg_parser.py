@@ -119,7 +119,9 @@ async def test_parse_single_channel_includes_start_date_when_explicit_date_from_
         ],
     )
 
-    result = await parser._parse_single_channel(_source(channel_link), date_from=date(2026, 2, 13), date_to=date(2026, 2, 15))
+    result = await parser._parse_single_channel(
+        _source(channel_link), date_from=date(2026, 2, 13), date_to=date(2026, 2, 15)
+    )
 
     ok = [row["date"] for row in result] == ["2026-02-15", "2026-02-14", "2026-02-13"]
     assert ok, "Failure: parser did not include explicit inclusive date_from boundary"

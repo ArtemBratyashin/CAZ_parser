@@ -126,5 +126,7 @@ async def test_parse_stays_stable_during_concurrent_calls():
         manager.parse(sources, date_from=None, date_to=date(2026, 2, 15)),
     )
 
-    ok = all(len(result[0]) == 1 and result[1] == [] and result[2]["sources_total"] == 1 for result in [first, second, third])
+    ok = all(
+        len(result[0]) == 1 and result[1] == [] and result[2]["sources_total"] == 1 for result in [first, second, third]
+    )
     assert ok, "Failure: parser manager produced inconsistent results under concurrency"

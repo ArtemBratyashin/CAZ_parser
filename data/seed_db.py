@@ -66,10 +66,7 @@ def seed_database(
     if not dsn_to_use:
         raise ValueError("DB_DSN не задан. Невозможно выполнить /seed_db")
     if isinstance(dsn_to_use, str) and ":***@" in dsn_to_use:
-        raise ValueError(
-            "DB_DSN передан в замаскированном виде (***). "
-            "Передайте полный DSN с реальным паролем."
-        )
+        raise ValueError("DB_DSN передан в замаскированном виде (***). " "Передайте полный DSN с реальным паролем.")
 
     engine = create_engine(dsn_to_use)
     session_factory = sessionmaker(bind=engine)
