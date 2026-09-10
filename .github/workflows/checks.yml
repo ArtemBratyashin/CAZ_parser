@@ -1,25 +1,15 @@
-name: Test packages
-
+name: Python tests
 
 on:
-  push:
-    branches: ['main']
   pull_request:
 
-
 jobs:
-  unittest-backend:
+  test:
     name: Unit tests
     runs-on: ubuntu-latest
-    env:
-      DB_DSN: postgresql+psycopg2://postgres@localhost:5432/postgres
-    defaults:
-      run:
-        shell: bash
-        working-directory: .
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:15
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
@@ -33,24 +23,25 @@ jobs:
         uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - name: Install dependencies
         run: |
           python -m ensurepip
           python -m pip install --upgrade --no-cache-dir pip
           python -m pip install --upgrade --no-cache-dir -r requirements.txt -r requirements.dev.txt
       - name: Migrate DB
-        run: alembic upgrade head
+        run: |
+          DB_DSN=postgresql://postgres@localhost:5432/postgres alembic upgrade head
       - name: Build coverage file
         run: |
-          pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=app tests/ | tee pytest-coverage.txt
+          DB_DSN=postgresql://postgres@localhost:5432/postgres pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=modal_backend tests/ | tee pytest-coverage.txt
+          exit ${PIPESTATUS[0]}
       - name: Print report
         if: always()
         run: |
           cat pytest-coverage.txt
       - name: Pytest coverage comment
         uses: MishaKav/pytest-coverage-comment@main
-        if: github.event_name == 'pull_request'
         with:
           pytest-coverage-path: ./pytest-coverage.txt
           title: Coverage Report
@@ -63,30 +54,24 @@ jobs:
           remove-link-from-badge: false
           junitxml-path: ./pytest.xml
           junitxml-title: Summary
+      - name: Fail on pytest errors
+        if: steps.pytest.outcome == 'failure'
+        run: exit 1
 
-
-  linting-backend:
-    name: Style tests
+  linting:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v2
         with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m ensurepip
-          python -m pip install --upgrade --no-cache-dir pip
-          python -m pip install --upgrade --no-cache-dir -r requirements.txt -r requirements.dev.txt
-      - name: Check import sorting
-        run: python -m isort --check-only app data tests
-      - name: Check formatting
-        run: python -m black --check app data tests
+          python-version: 3.11
+      - uses: isort/isort-action@master
+        with:
+          requirementsFiles: "requirements.txt requirements.dev.txt"
+      - uses: psf/black@stable
       - name: Comment if linting failed
-        if: failure() && github.event_name == 'pull_request'
+        if: failure()
         uses: thollander/actions-comment-pull-request@v2
         with:
           message: |
             :poop: Code linting failed, use `black` and `isort` to fix it.
-
