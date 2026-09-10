@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from handlers.register import register_basic_handlers
-from telegram.ext import ApplicationBuilder, Application, ContextTypes
+from telegram.ext import Application, ApplicationBuilder, ContextTypes
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +32,9 @@ class DigestBotApp:
         builder = ApplicationBuilder().token(self._token)
 
         if self._proxy_url:
-            builder = (
-                builder
-                .proxy(self._proxy_url)
-                .get_updates_proxy(self._proxy_url)
-            )
+            builder = builder.proxy(self._proxy_url).get_updates_proxy(self._proxy_url)
 
-        application = (
-            builder
-            .post_init(self._on_startup)
-            .post_shutdown(self._on_shutdown)
-            .build()
-        )
+        application = builder.post_init(self._on_startup).post_shutdown(self._on_shutdown).build()
 
         application.bot_data["orchestrator"] = self._orchestrator
         register_basic_handlers(application)
