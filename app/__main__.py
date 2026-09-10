@@ -45,6 +45,7 @@ if __name__ == "__main__":
             settings.sending_minute(),
             tzinfo=ZoneInfo("Europe/Moscow"),
         ),
+        proxy_url=settings.PROXY_URL,
     )
 
     bot_app.run()

@@ -1,9 +1,9 @@
 import datetime as dt
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from handlers.register import register_basic_handlers
-from telegram.ext import Application, ContextTypes
+from telegram.ext import ApplicationBuilder, Application, ContextTypes
 
 logger = logging.getLogger(__name__)
 
@@ -18,23 +18,33 @@ class DigestBotApp:
         chat_id_errors: int,
         orchestrator,
         daily_time: dt.time,
+        proxy_url: Optional[str] = None,
     ) -> None:
-        """Сохраняет зависимости и параметры запуска."""
         self._token = token
         self._chat_id = chat_id
         self._chat_id_errors = chat_id_errors
         self._orchestrator = orchestrator
         self._daily_time = daily_time or dt.time(hour=17, minute=0)
+        self._proxy_url = proxy_url
 
     def run(self) -> None:
         """Запускает polling и регистрирует обработчики."""
+        builder = ApplicationBuilder().token(self._token)
+
+        if self._proxy_url:
+            builder = (
+                builder
+                .proxy(self._proxy_url)
+                .get_updates_proxy(self._proxy_url)
+            )
+
         application = (
-            Application.builder()
-            .token(self._token)
+            builder
             .post_init(self._on_startup)
             .post_shutdown(self._on_shutdown)
             .build()
         )
+
         application.bot_data["orchestrator"] = self._orchestrator
         register_basic_handlers(application)
         application.run_polling()
